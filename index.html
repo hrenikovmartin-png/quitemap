@@ -8,7 +8,6 @@
     html, body { margin: 0; height: 100%; font-family: Arial, sans-serif; }
     #map { height: 100vh; width: 100%; }
     
-    /* Добавим небольшую плашку с названием региона для красоты */
     .region-label {
       position: absolute;
       top: 10px;
@@ -30,28 +29,30 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    // 1. Ограничиваем видимую область примерными координатами края
-    // Юго-запад (Сочи/Анапа) и Северо-восток (граница с Ростовской обл.)
+    // Ваш ключ CARTO
+    const CARTO_API_KEY = 'cb1_56xg_1_74efb1c0daaf793c6f4dd06c';
+
+    // Ограничения по Краснодарскому краю
     const southWest = L.latLng(43.0, 36.5);
     const northEast = L.latLng(47.0, 41.5);
     const bounds = L.latLngBounds(southWest, northEast);
 
-    // 2. Создаем карту с ограничениями
+    // Создаем карту с ограничениями
     const map = L.map('map', {
       center: [45.0355, 38.9753], // Центр (Краснодар)
-      zoom: 8,                    // Стартовый зум (весь край)
-      minZoom: 7,                 // Запрещаем отдаляться дальше (чтобы не видеть весь мир)
-      maxBounds: bounds,          // Запрещаем перетаскивать карту за пределы края
-      maxBoundsViscosity: 1.0     // 1.0 = жесткая привязка к границам (карта не пружинит)
+      zoom: 8,                    // Стартовый зум
+      minZoom: 7,                 // Запрет на отдаление
+      maxBounds: bounds,          // Запрет на уход за пределы края
+      maxBoundsViscosity: 1.0
     });
 
-    // 3. Подключаем слой карты (используем CartoDB, так как OSM может блокировать)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    // Подключаем растровые тайлы CARTO (Voyager) с вашим ключом
+    L.tileLayer(`https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=${CARTO_API_KEY}`, {
       attribution: '© OpenStreetMap © CARTO',
-      bounds: bounds // Серверу отправляем запросы только для этого региона
+      bounds: bounds
     }).addTo(map);
 
-    // 4. (Опционально) Добавим маркер для проверки кликов
+    // Тестовый маркер при клике (чтобы проверить работу)
     map.on('click', function(e) {
         L.marker(e.latlng).addTo(map)
             .bindPopup(`Координаты:<br>Широта: ${e.latlng.lat.toFixed(4)}<br>Долгота: ${e.latlng.lng.toFixed(4)}`)
