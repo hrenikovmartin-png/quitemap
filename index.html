@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>QuietWalk — Реальный маршрут</title>
+  <title>QuietWalk — Поиск с подсказками</title>
   
   <!-- Стили Leaflet и плагина маршрутизации -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -20,7 +20,32 @@
     button:hover:not(:disabled) { background: #334155; }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
     
-    /* Прячем стандартную панель ввода адресов плагина, чтобы не мешала */
+    /* Стили для поиска и выпадающего списка */
+    .search-container { position: relative; display: flex; gap: 8px; }
+    .search-container input { 
+      flex: 1; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; 
+      font-size: 14px; outline: none; transition: border 0.2s;
+    }
+    .search-container input:focus { border-color: #3b82f6; }
+    .search-container button { padding: 10px 15px; margin-top: 0; background: #3b82f6; }
+    .search-container button:hover { background: #2563eb; }
+    
+    #suggestions {
+      position: absolute; top: 100%; left: 0; right: 45px;
+      background: white; border: 1px solid #cbd5e1; border-top: none;
+      border-radius: 0 0 8px 8px; list-style: none; margin: 0; padding: 0;
+      max-height: 200px; overflow-y: auto; z-index: 1001;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      display: none;
+    }
+    #suggestions li {
+      padding: 10px; cursor: pointer; font-size: 13px;
+      border-bottom: 1px solid #f1f5f9; color: #334155;
+    }
+    #suggestions li:hover { background: #f8fafc; color: #0f172a; }
+    #suggestions li:last-child { border-bottom: none; }
+    
+    /* Прячем стандартную панель плагина */
     .leaflet-routing-container { display: none !important; }
   </style>
 </head>
@@ -28,6 +53,14 @@
 
 <div id="sidebar">
   <h2>🌿 QuietWalk</h2>
+  
+  <!-- БЛОК ПОИСКА С ПОДСКАЗКАМИ -->
+  <div class="search-container">
+    <input type="text" id="search-input" placeholder="кра - ул Красная..." autocomplete="off" oninput="handleSearchInput()" onkeypress="handleSearchEnter(event)">
+    <button onclick="searchAddress()">🔍</button>
+    <ul id="suggestions"></ul>
+  </div>
+
   <p>Кликните на карту, чтобы поставить <b>точку А</b> (старт), затем <b>точку Б</b> (финиш).</p>
   
   <div class="card">
@@ -69,7 +102,130 @@
   let markers = [];
   let routingControl = null;
 
-  // Обработчик клика по карте
+  // --- ЖИВОЙ ПОИСК (АВТОДОПОЛНЕНИЕ) ---
+  let searchTimeout = null;
+
+  function handleSearchInput() {
+    const query = document.getElementById('search-input').value.trim();
+    const suggestionsBox = document.getElementById('suggestions');
+    
+    // Скрываем подсказки, если ввели меньше 3 символов
+    if (query.length < 3) {
+      suggestionsBox.style.display = 'none';
+      return;
+    }
+
+    // Делаем задержку (debounce) в 500мс, чтобы не спамить API на каждую букву
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      fetchSuggestions(query);
+    }, 500);
+  }
+
+  async function fetchSuggestions(query) {
+    const suggestionsBox = document.getElementById('suggestions');
+    
+    try {
+      // Ограничиваем поиск Краснодарским краем
+      const viewbox = `${southWest.lng},${northEast.lat},${northEast.lng},${southWest.lat}`;
+      // limit=5 — показываем только 5 лучших вариантов
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&viewbox=${viewbox}&bounded=1&limit=5`;
+      
+      const response = await fetch(url, {
+        headers: { 'Accept-Language': 'ru' }
+      });
+      const data = await response.json();
+
+      if (data && data.length > 0) {
+        suggestionsBox.innerHTML = '';
+        data.forEach(item => {
+          const li = document.createElement('li');
+          // Берем только первые две части адреса для красоты
+          const shortName = item.display_name.split(',').slice(0, 2).join(',');
+          li.innerText = shortName;
+          li.title = item.display_name;
+          
+          li.onclick = () => {
+            selectSuggestion(item);
+          };
+          suggestionsBox.appendChild(li);
+        });
+        suggestionsBox.style.display = 'block';
+      } else {
+        suggestionsBox.style.display = 'none';
+      }
+    } catch (err) {
+      console.error('Ошибка поиска:', err);
+    }
+  }
+
+  function selectSuggestion(item) {
+    const lat = parseFloat(item.lat);
+    const lon = parseFloat(item.lon);
+    
+    // Заполняем инпут выбранным названием
+    document.getElementById('search-input').value = item.display_name.split(',').slice(0, 2).join(',');
+    document.getElementById('suggestions').style.display = 'none';
+
+    // Плавно летим к месту
+    map.flyTo([lat, lon], 15, { duration: 1.5 });
+    
+    // Ставим временный синий маркер
+    if (window.searchMarker) map.removeLayer(window.searchMarker);
+    window.searchMarker = L.circleMarker([lat, lon], {
+      radius: 10, color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.5, weight: 2
+    }).addTo(map).bindPopup(`Найдено: ${item.display_name}`).openPopup();
+  }
+
+  function handleSearchEnter(e) {
+    if (e.key === 'Enter') {
+      // Если нажали Enter, а подсказки открыты — выбираем первую
+      const firstSuggestion = document.querySelector('#suggestions li');
+      if (firstSuggestion && document.getElementById('suggestions').style.display === 'block') {
+        firstSuggestion.click();
+      } else {
+        searchAddress(); // Иначе делаем обычный поиск
+      }
+    }
+  }
+
+  async function searchAddress() {
+    const query = document.getElementById('search-input').value.trim();
+    if (!query) return;
+
+    const searchBtn = document.querySelector('.search-container button');
+    searchBtn.innerText = '⏳';
+    
+    try {
+      const viewbox = `${southWest.lng},${northEast.lat},${northEast.lng},${southWest.lat}`;
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&viewbox=${viewbox}&bounded=1&limit=1`;
+      
+      const response = await fetch(url, {
+        headers: { 'Accept-Language': 'ru' }
+      });
+      const data = await response.json();
+
+      if (data && data.length > 0) {
+        selectSuggestion(data[0]);
+      } else {
+        alert('Ничего не найдено. Попробуйте уточнить запрос.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Ошибка при поиске. Проверьте интернет.');
+    } finally {
+      searchBtn.innerText = '🔍';
+    }
+  }
+
+  // Закрываем подсказки при клике мимо
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.search-container')) {
+      document.getElementById('suggestions').style.display = 'none';
+    }
+  });
+
+  // --- ЛОГИКА КЛИКОВ И МАРШРУТОВ ---
   map.on('click', function (e) {
     if (points.length >= 2) return;
 
@@ -79,40 +235,29 @@
       .bindPopup(points.length === 1 ? 'Старт (А)' : 'Финиш (Б)').openPopup();
     markers.push(marker);
 
-    // Если поставлены обе точки — строим маршрут
     if (points.length === 2) {
       buildRealRoute(points[0], points[1]);
     }
   });
 
-  // Функция построения настоящего маршрута по улицам
   function buildRealRoute(start, end) {
-    // Если старый маршрут был — удаляем его
     if (routingControl) {
       map.removeControl(routingControl);
     }
 
-    // Создаем контроллер маршрутизации
     routingControl = L.Routing.control({
       waypoints: [start, end],
-      // Используем пешеходный профиль (foot) с публичного демо-сервера OSRM
       router: L.Routing.osrmv1({
         serviceUrl: 'https://routing.openstreetmap.de/routed-foot/route/v1',
         profile: 'foot'
       }),
-      // Убираем панель с инструкциями, чтобы не перекрывала карту
-      show: false,
-      // Убираем стандартные маркеры плагина (у нас свои)
-      createMarker: function() { return null; },
-      // Настройка внешнего вида линии
+      show: false, 
+      createMarker: function() { return null; }, 
       lineOptions: {
         styles: [{ color: '#3b82f6', opacity: 0.9, weight: 6 }]
-      },
-      // Язык инструкций (не пригодится, так как show: false, но пусть будет)
-      language: 'ru'
+      }
     }).addTo(map);
 
-    // Когда маршрут построен, выводим информацию
     routingControl.on('routesfound', function (e) {
       const route = e.routes[0];
       const summary = route.summary;
@@ -125,13 +270,11 @@
          <span style="font-size: 12px; color: #64748b;">Пешеходный маршрут</span>`;
     });
 
-    // Если произошла ошибка
     routingControl.on('routingerror', function (e) {
       console.error('Ошибка маршрута:', e);
       document.getElementById('route-stats').innerText = 'Не удалось построить маршрут';
     });
 
-    // Подгоняем карту, чтобы маршрут был виден
     map.fitBounds([start, end], { padding: [50, 50] });
   }
 
@@ -143,8 +286,14 @@
       map.removeControl(routingControl);
       routingControl = null;
     }
+    if (window.searchMarker) {
+      map.removeLayer(window.searchMarker);
+      window.searchMarker = null;
+    }
     markers = [];
     document.getElementById('route-stats').innerText = 'Ожидание точек...';
+    document.getElementById('search-input').value = '';
+    document.getElementById('suggestions').style.display = 'none';
   }
 
   document.getElementById('reset-btn').disabled = false;
