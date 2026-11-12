@@ -2,62 +2,153 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>QuietWalk — Краснодарский край</title>
+  <title>QuietWalk — Реальный маршрут</title>
+  
+  <!-- Стили Leaflet и плагина маршрутизации -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+  
   <style>
-    html, body { margin: 0; height: 100%; font-family: Arial, sans-serif; }
-    #map { height: 100vh; width: 100%; }
+    body { margin: 0; font-family: Arial, sans-serif; display: flex; height: 100vh; }
+    #sidebar { width: 340px; padding: 20px; background: #f8fafc; box-shadow: 2px 0 10px rgba(0,0,0,0.1); z-index: 1000; display: flex; flex-direction: column; gap: 15px; }
+    #map { flex: 1; }
+    h2 { margin: 0; color: #1e293b; font-size: 20px; }
+    p { margin: 0; color: #475569; font-size: 14px; line-height: 1.4; }
+    .card { background: white; padding: 14px; border-radius: 10px; border-left: 5px solid #3b82f6; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .stat { font-weight: bold; font-size: 16px; margin-top: 6px; color: #0f172a; }
+    button { padding: 10px; border: none; border-radius: 8px; background: #0f172a; color: white; cursor: pointer; font-size: 14px; margin-top: auto;}
+    button:hover:not(:disabled) { background: #334155; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
     
-    .region-label {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      z-index: 1000;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 8px 15px;
-      border-radius: 8px;
-      font-weight: bold;
-      color: #1e293b;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-      pointer-events: none;
-    }
+    /* Прячем стандартную панель ввода адресов плагина, чтобы не мешала */
+    .leaflet-routing-container { display: none !important; }
   </style>
 </head>
 <body>
-  <div class="region-label">📍 Краснодарский край</div>
-  <div id="map"></div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
-    // Ваш ключ CARTO
-    const CARTO_API_KEY = 'cb1_56xg_1_74efb1c0daaf793c6f4dd06c';
+<div id="sidebar">
+  <h2>🌿 QuietWalk</h2>
+  <p>Кликните на карту, чтобы поставить <b>точку А</b> (старт), затем <b>точку Б</b> (финиш).</p>
+  
+  <div class="card">
+    <div>🔵 Пешеходный маршрут (по улицам)</div>
+    <div class="stat" id="route-stats">Ожидание точек...</div>
+  </div>
 
-    // Ограничения по Краснодарскому краю
-    const southWest = L.latLng(43.0, 36.5);
-    const northEast = L.latLng(47.0, 41.5);
-    const bounds = L.latLngBounds(southWest, northEast);
+  <button id="reset-btn" onclick="resetMap()" disabled>Сбросить точки</button>
+</div>
 
-    // Создаем карту с ограничениями
-    const map = L.map('map', {
-      center: [45.0355, 38.9753], // Центр (Краснодар)
-      zoom: 8,                    // Стартовый зум
-      minZoom: 7,                 // Запрет на отдаление
-      maxBounds: bounds,          // Запрет на уход за пределы края
-      maxBoundsViscosity: 1.0
-    });
+<div id="map"></div>
 
-    // Подключаем растровые тайлы CARTO (Voyager) с вашим ключом
-    L.tileLayer(`https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=${CARTO_API_KEY}`, {
-      attribution: '© OpenStreetMap © CARTO',
-      bounds: bounds
+<!-- Подключаем Leaflet и плагин маршрутизации -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+<script>
+  // --- НАСТРОЙКА КАРТЫ ---
+  const CARTO_API_KEY = 'cb1_56xg_1_74efb1c0daaf793c6f4dd06c';
+  const southWest = L.latLng(43.0, 36.5);
+  const northEast = L.latLng(47.0, 41.5);
+  const bounds = L.latLngBounds(southWest, northEast);
+
+  const map = L.map('map', {
+    center: [45.0355, 38.9753], // Краснодар
+    zoom: 13,
+    minZoom: 7,
+    maxBounds: bounds,
+    maxBoundsViscosity: 1.0
+  });
+
+  L.tileLayer(`https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=${CARTO_API_KEY}`, {
+    attribution: '© OpenStreetMap © CARTO',
+    bounds: bounds
+  }).addTo(map);
+
+  // --- ЛОГИКА МАРШРУТА ---
+  let points = [];
+  let markers = [];
+  let routingControl = null;
+
+  // Обработчик клика по карте
+  map.on('click', function (e) {
+    if (points.length >= 2) return;
+
+    points.push(e.latlng);
+
+    const marker = L.marker(e.latlng).addTo(map)
+      .bindPopup(points.length === 1 ? 'Старт (А)' : 'Финиш (Б)').openPopup();
+    markers.push(marker);
+
+    // Если поставлены обе точки — строим маршрут
+    if (points.length === 2) {
+      buildRealRoute(points[0], points[1]);
+    }
+  });
+
+  // Функция построения настоящего маршрута по улицам
+  function buildRealRoute(start, end) {
+    // Если старый маршрут был — удаляем его
+    if (routingControl) {
+      map.removeControl(routingControl);
+    }
+
+    // Создаем контроллер маршрутизации
+    routingControl = L.Routing.control({
+      waypoints: [start, end],
+      // Используем пешеходный профиль (foot) с публичного демо-сервера OSRM
+      router: L.Routing.osrmv1({
+        serviceUrl: 'https://routing.openstreetmap.de/routed-foot/route/v1',
+        profile: 'foot'
+      }),
+      // Убираем панель с инструкциями, чтобы не перекрывала карту
+      show: false,
+      // Убираем стандартные маркеры плагина (у нас свои)
+      createMarker: function() { return null; },
+      // Настройка внешнего вида линии
+      lineOptions: {
+        styles: [{ color: '#3b82f6', opacity: 0.9, weight: 6 }]
+      },
+      // Язык инструкций (не пригодится, так как show: false, но пусть будет)
+      language: 'ru'
     }).addTo(map);
 
-    // Тестовый маркер при клике (чтобы проверить работу)
-    map.on('click', function(e) {
-        L.marker(e.latlng).addTo(map)
-            .bindPopup(`Координаты:<br>Широта: ${e.latlng.lat.toFixed(4)}<br>Долгота: ${e.latlng.lng.toFixed(4)}`)
-            .openPopup();
+    // Когда маршрут построен, выводим информацию
+    routingControl.on('routesfound', function (e) {
+      const route = e.routes[0];
+      const summary = route.summary;
+      
+      const minutes = Math.round(summary.totalTime / 60);
+      const km = (summary.totalDistance / 1000).toFixed(2);
+      
+      document.getElementById('route-stats').innerHTML = 
+        `<span style="color:#3b82f6">${minutes} мин (${km} км)</span><br>
+         <span style="font-size: 12px; color: #64748b;">Пешеходный маршрут</span>`;
     });
-  </script>
+
+    // Если произошла ошибка
+    routingControl.on('routingerror', function (e) {
+      console.error('Ошибка маршрута:', e);
+      document.getElementById('route-stats').innerText = 'Не удалось построить маршрут';
+    });
+
+    // Подгоняем карту, чтобы маршрут был виден
+    map.fitBounds([start, end], { padding: [50, 50] });
+  }
+
+  // Сброс
+  function resetMap() {
+    points = [];
+    markers.forEach(m => map.removeLayer(m));
+    if (routingControl) {
+      map.removeControl(routingControl);
+      routingControl = null;
+    }
+    markers = [];
+    document.getElementById('route-stats').innerText = 'Ожидание точек...';
+  }
+
+  document.getElementById('reset-btn').disabled = false;
+</script>
+
 </body>
 </html>
