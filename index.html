@@ -44,7 +44,8 @@ const sensitivityNames={1:'Мягкая',2:'Средняя',3:'Строгая'};
 // Рабочая область QuietWalk: Краснодарский край (приближённый ограничивающий прямоугольник).
 const KRAI_BOUNDS={south:43.30,north:47.90,west:36.50,east:41.90};
 function inKrasnodarKrai(lat,lon){return Number.isFinite(lat)&&Number.isFinite(lon)&&lat>=KRAI_BOUNDS.south&&lat<=KRAI_BOUNDS.north&&lon>=KRAI_BOUNDS.west&&lon<=KRAI_BOUNDS.east}
-function routeInsideKrai(route){const cs=route?.geometry?.coordinates;return Array.isArray(cs)&&cs.length>1&&cs.every(c=>Array.isArray(c)&&inKrasnodarKrai(+c[1],+c[0]))}
+// Для проверки геометрии маршрута используем небольшой запас за рамкой карты: дорожный граф может вести по подъездным дорогам у административной границы. Турция и дальние регионы по-прежнему исключены.
+function routeInsideKrai(route){const cs=route?.geometry?.coordinates;if(!Array.isArray(cs)||cs.length<2)return false;const routeBounds={south:42.7,north:48.2,west:35.8,east:43.0};return cs.every(c=>Array.isArray(c)&&Number.isFinite(+c[0])&&Number.isFinite(+c[1])&&+c[1]>=routeBounds.south&&+c[1]<=routeBounds.north&&+c[0]>=routeBounds.west&&+c[0]<=routeBounds.east)}
 function toast(msg){const el=$('toast');el.textContent=msg;el.style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.style.display='none',3300)}
 function setStatus(s){$('mapStatus').textContent=s}
 function cartoUrl(style){return style==='dark_all'?'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png':'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'}
@@ -72,12 +73,12 @@ async function getFootRoute(coords){
       return route;
     }catch(e){orsError=e;console.warn('ORS route rejected; trying regional fallback:',e)}
   }
-  // Резервный маршрутизатор. Результат обязательно проверяется на принадлежность региону.
-  const path=coords.map(c=>c[1]+','+c[0]).join(';');
+  // Резервный маршрутизатор использует формат OSRM lon,lat. Результат проверяется с небольшим запасом у границы региона.
+  const path=coords.map(c=>c[0]+','+c[1]).join(';');
   const url='https://routing.openstreetmap.de/routed-foot/route/v1/driving/'+path+'?overview=full&geometries=geojson&steps=false';
   const res=await fetch(url);if(!res.ok)throw Error('Пешеходный маршрутизатор вернул ошибку ('+res.status+')'+(orsError?'; ORS: '+orsError.message:''));
   const data=await res.json();if(data.code!=='Ok'||!data.routes?.length)throw Error('Не удалось проложить пеший путь в Краснодарском крае');
-  const route=data.routes[0];if(!routeInsideKrai(route))throw Error('Маршрутизатор вернул путь за пределами Краснодарского края. Маршрут не показан.');
+  const route=data.routes[0];if(!routeInsideKrai(route))throw Error('Сервис прокладки вернул маршрут далеко за пределами Краснодарского края. Он отклонён. Проверьте точки и попробуйте ещё раз.');
   return route;
 }
 function haversine(a,b){const R=6371000,toRad=x=>x*Math.PI/180,dLat=toRad(b[1]-a[1]),dLon=toRad(b[0]-a[0]),x=Math.sin(dLat/2)**2+Math.cos(toRad(a[1]))*Math.cos(toRad(b[1]))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
