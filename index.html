@@ -85,10 +85,56 @@ async function getFootRoute(coords){
 }
 function haversine(a,b){const R=6371000,toRad=x=>x*Math.PI/180,dLat=toRad(b[1]-a[1]),dLon=toRad(b[0]-a[0]),x=Math.sin(dLat/2)**2+Math.cos(toRad(a[1]))*Math.cos(toRad(b[1]))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
 function minDistanceToReports(coords){if(!reports.length)return 99999;let min=99999;for(let i=0;i<coords.length;i+=Math.max(1,Math.floor(coords.length/80))){for(const r of reports)min=Math.min(min,haversine(coords[i],[r.lon,r.lat]))}return min}
-function routeScore(route){const coords=route.geometry.coordinates;const radius=Number($('sensitivity').value);let penalty=0;for(const r of reports){const d=minDistanceToReportsForOne(coords,r);const threshold=radius===1?70:radius===2?130:220;if(d<threshold)penalty+=(threshold-d)*5}return route.distance+penalty}
+function routeNoisePenalty(route){const coords=route.geometry.coordinates;const radius=Number($('sensitivity').value);let penalty=0;for(const r of reports){const d=minDistanceToReportsForOne(coords,r);const threshold=radius===1?70:radius===2?130:220;if(d<threshold)penalty+=(threshold-d)}return penalty}
 function minDistanceToReportsForOne(coords,r){let min=99999;for(let i=0;i<coords.length;i+=Math.max(1,Math.floor(coords.length/100)))min=Math.min(min,haversine(coords[i],[r.lon,r.lat]));return min}
-async function buildRoute(quiet){if(points.length===2&&!points.every(p=>inKrasnodarKrai(p.lat,p.lng))){toast('Обе точки должны быть в Краснодарском крае');return}if(points.length!==2){toast('Сначала выберите на карте начало и конец');return}setStatus(quiet?'Ищем более спокойный путь…':'Строим пеший маршрут…');$('quietBtn').disabled=$('fastBtn').disabled=true;try{let chosen,base;if(!quiet){chosen=await getFootRoute(points.map(p=>[p.lng,p.lat]));base=chosen}else{const a=points[0],b=points[1],dx=b.lng-a.lng,dy=b.lat-a.lat,len=Math.hypot(dx,dy)||1,offsets=[0.0018,0.0032,0.0048];const candidates=[];const direct=await getFootRoute([[a.lng,a.lat],[b.lng,b.lat]]);candidates.push(direct);for(const off of offsets){for(const sign of [-1,1]){const mid=L.latLng((a.lat+b.lat)/2+sign*dx/len*off,(a.lng+b.lng)/2-sign*dy/len*off);try{candidates.push(await getFootRoute([[a.lng,a.lat],[mid.lng,mid.lat],[b.lng,b.lat]]))}catch(e){}}}base=direct;const maxDetour=Number($('sensitivity').value)===3?1.65:1.45;const acceptable=candidates.filter(r=>r.distance<=direct.distance*maxDetour);chosen=(acceptable.length?acceptable:candidates).sort((x,y)=>routeScore(x)-routeScore(y))[0]}
-if(!routeInsideKrai(chosen))throw Error('Полученный маршрут выходит за пределы Краснодарского края и был отменён');if(routeLayer)map.removeLayer(routeLayer);routeLayer=L.geoJSON({type:'Feature',geometry:chosen.geometry,properties:{}},{style:{color:quiet?'#25865b':'#397bc7',weight:6,opacity:.9,lineCap:'round'}}).addTo(map);map.fitBounds(routeLayer.getBounds().pad(0.08),{padding:[30,30],maxZoom:17});clampMapCamera();const km=chosen.distance/1000,min=chosen.duration/60,detour=base?Math.max(0,(chosen.distance/base.distance-1)*100):0;lastRoute={quiet,coords:chosen.geometry.coordinates,distance:chosen.distance,duration:chosen.duration,detour};$('routeCard').style.display='block';$('routeTitle').textContent=quiet?'🌿 Более спокойный вариант':'🚶 Пеший маршрут';$('routeDesc').textContent=(orsKey?'Маршрут построен через OpenRouteService. ':'Резервный маршрутизатор OpenStreetMap. ')+(quiet?(reports.length?'При запросе ORS переданы шумовые зоны; результат дополнительно оценён по близости к отметкам.':'Отметок шума пока нет: выбран альтернативный вариант пешего пути.'): 'Пешеходный маршрут без оптимизации по шуму.');$('distance').textContent=km.toFixed(2)+' км';$('duration').textContent=Math.max(1,Math.round(min))+' мин';$('detour').textContent=quiet?'+'+Math.round(detour)+'%':'—';setStatus(quiet?'Маршрут построен':'Пеший маршрут построен');toast('Маршрут готов. Проверьте его перед выходом.')}catch(e){console.error(e);toast(e.message+' Попробуйте ещё раз или выберите другие точки.');setStatus('Не удалось построить маршрут')}finally{$('quietBtn').disabled=$('fastBtn').disabled=false}}
+async function buildRoute(quiet){
+ if(points.length===2&&!points.every(p=>inKrasnodarKrai(p.lat,p.lng))){toast('Обе точки должны быть в Краснодарском крае');return}
+ if(points.length!==2){toast('Сначала выберите на карте начало и конец');return}
+ setStatus(quiet?'Ищем альтернативный спокойный путь…':'Строим пеший маршрут…');$('quietBtn').disabled=$('fastBtn').disabled=true;
+ try{
+  const a=points[0],b=points[1],start=[a.lng,a.lat],finish=[b.lng,b.lat];
+  let chosen,base,detour=0;
+  base=await getFootRoute([start,finish]);
+  if(!quiet){chosen=base;}
+  else{
+   const candidates=[base];
+   const dx=b.lng-a.lng,dy=b.lat-a.lat,len=Math.hypot(dx,dy)||1;
+   // Разные промежуточные точки заставляют маршрутизатор искать реальные обходные варианты,
+   // а не повторно запрашивать тот же кратчайший путь.
+   const offsets=[0.0015,0.0025,0.0038,0.0052,0.0065];
+   for(const off of offsets){
+    for(const sign of [-1,1]){
+     const mid=L.latLng((a.lat+b.lat)/2+sign*dx/len*off,(a.lng+b.lng)/2-sign*dy/len*off);
+     if(!inKrasnodarKrai(mid.lat,mid.lng))continue;
+     try{const r=await getFootRoute([start,[mid.lng,mid.lat],finish]);if(routeInsideKrai(r)&&!candidates.some(x=>Math.abs(x.distance-r.distance)<15&&x.geometry.coordinates.length===r.geometry.coordinates.length))candidates.push(r)}catch(e){console.warn('Quiet candidate rejected:',e.message)}
+    }
+   }
+   const maxDetour=Number($('sensitivity').value)===3?1.65:1.45;
+   const acceptable=candidates.filter(r=>r.distance<=base.distance*maxDetour&&r.distance>=base.distance*1.015);
+   const pool=acceptable.length?acceptable:candidates;
+   // Сначала избегаем пользовательских шумовых отметок. При равной оценке предпочитаем
+   // умеренный обход, поэтому тихий режим отличается от кратчайшего даже без отметок.
+   chosen=pool.sort((x,y)=>{
+    const noiseDiff=routeNoisePenalty(x)-routeNoisePenalty(y);
+    if(Math.abs(noiseDiff)>1)return noiseDiff;
+    return y.distance-x.distance;
+   })[0];
+   detour=Math.max(0,(chosen.distance/base.distance-1)*100);
+  }
+  if(!routeInsideKrai(chosen))throw Error('Полученный маршрут выходит за пределы Краснодарского края и был отменён');
+  if(routeLayer)map.removeLayer(routeLayer);
+  routeLayer=L.geoJSON({type:'Feature',geometry:chosen.geometry,properties:{}},{style:{color:quiet?'#25865b':'#397bc7',weight:6,opacity:.9,lineCap:'round'}}).addTo(map);
+  map.fitBounds(routeLayer.getBounds().pad(0.08),{padding:[30,30],maxZoom:17});clampMapCamera();
+  const km=chosen.distance/1000,min=chosen.duration/60;
+  lastRoute={quiet,coords:chosen.geometry.coordinates,distance:chosen.distance,duration:chosen.duration,detour};
+  $('routeCard').style.display='block';
+  $('routeTitle').textContent=quiet?'🌿 Альтернативный маршрут':'🚶 Кратчайший пеший маршрут';
+  $('routeDesc').textContent=quiet?(reports.length?'Подобран обход с учётом ваших шумовых отметок. Это эвристика по отмеченным точкам, а не измерение реального уровня шума.':'Подобран обходной вариант, отличный от кратчайшего, если дорожная сеть позволяет. Без шумовых отметок это эвристика, а не гарантия тишины.'):(orsKey?'Кратчайший пеший вариант через OpenRouteService.':'Кратчайший доступный пеший вариант через резервный маршрутизатор.');
+  $('distance').textContent=km.toFixed(2)+' км';$('duration').textContent=Math.max(1,Math.round(min))+' мин';$('detour').textContent=quiet?'+'+Math.round(detour)+'%':'—';
+  setStatus(quiet?'Альтернативный маршрут построен':'Кратчайший пеший маршрут построен');toast('Маршрут готов. Проверьте его перед выходом.');
+ }catch(e){console.error(e);toast(e.message+' Попробуйте ещё раз или выберите другие точки.');setStatus('Не удалось построить маршрут')}
+ finally{$('quietBtn').disabled=$('fastBtn').disabled=false}
+}
 function resetRoute(){points=[];pointMarkers.forEach(m=>map.removeLayer(m));pointMarkers=[];if(routeLayer)map.removeLayer(routeLayer);routeLayer=null;if(searchMarker){map.removeLayer(searchMarker);searchMarker=null}$('routeCard').style.display='none';lastRoute=null;updatePointLabels();setStatus('Карта готова к прогулке')}
 async function shareRoute(){if(points.length!==2){toast('Сначала выберите две точки');return}const u=new URL(location.href);u.searchParams.set('start',points[0].lat+','+points[0].lng);u.searchParams.set('end',points[1].lat+','+points[1].lng);try{await navigator.clipboard.writeText(u.toString());toast('Ссылка скопирована')}catch{prompt('Скопируйте ссылку:',u.toString())}}
 function readSharedRoute(){const p=new URLSearchParams(location.search),s=p.get('start'),e=p.get('end');if(!s||!e)return;try{const pair=[s,e].map(v=>v.split(',').map(Number));if(!pair.every(([lat,lon])=>inKrasnodarKrai(lat,lon))){toast('Ссылка содержит точки за пределами Краснодарского края');return}[s,e].forEach(v=>{const [lat,lon]=v.split(',').map(Number);if(Number.isFinite(lat)&&Number.isFinite(lon))setPoint(L.latLng(lat,lon))});if(points.length===2){map.fitBounds(L.latLngBounds(points));setTimeout(()=>buildRoute(true),500)}}catch{toast('Ссылка на маршрут повреждена')}}
