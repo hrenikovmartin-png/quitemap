@@ -20,7 +20,7 @@
  <section class="section"><div class="eyebrow">02 · Ваш маршрут</div><div class="points"><div class="point"><b>А · СТАРТ</b><span id="startLabel">Нажмите на карту</span></div><div class="point"><b>Б · ФИНИШ</b><span id="endLabel">Нажмите на карту</span></div></div><div class="actions"><button class="btn primary" id="quietBtn">🌿 Найти тихий путь</button><button class="btn soft" id="fastBtn">Прямой пеший</button><button class="btn plain" id="geoBtn">◎ Моё местоположение</button><button class="btn plain" id="shareBtn">↗ Поделиться</button><button class="btn primary wide" id="startNavBtn">▶ Начать GPS-навигацию</button><button class="btn warn wide" id="stopNavBtn" disabled>■ Завершить навигацию</button><button class="btn plain wide" id="resetBtn">Сбросить маршрут</button></div>
  <div class="navstatus" id="navStatus">GPS-навигация выключена</div><div class="routecard" id="routeCard"><h3 id="routeTitle">Маршрут готов</h3><p id="routeDesc"></p><div class="stats"><div class="stat"><b id="distance">—</b><small>расстояние</small></div><div class="stat"><b id="duration">—</b><small>в пути</small></div><div class="stat"><b id="detour">—</b><small>обход</small></div></div></div>
  </section>
- <section class="section"><div class="eyebrow">03 · Подключение сервисов</div><details id="apiSettings" style="border:1px solid var(--line);border-radius:12px;padding:11px;background:var(--bg)"><summary style="cursor:pointer;font-size:12px;font-weight:800">Ключ OpenRouteService</summary><label style="display:block;font-size:11px;margin:10px 0 5px;color:var(--muted)">OpenRouteService API key</label><input class="field" id="orsKey" type="password" autocomplete="off" placeholder="Вставьте ORS API key"><label style="display:block;font-size:11px;margin:10px 0 5px;color:var(--muted)">CARTO API key больше не требуется для подложки карты</label><input class="field" id="cartoKey" type="password" autocomplete="off" placeholder="Не требуется"><button class="btn soft wide" id="saveApiBtn" style="margin-top:9px">Сохранить ключи на этом устройстве</button><p class="hint">Ключи хранятся только в локальном хранилище браузера, не в файле сайта. ORS нужен для прокладки маршрутов; Подложка карты OpenStreetMap загружается без API-ключа. Не публикуйте ORS-ключ в открытом GitHub.</p></details></section>
+ <section class="section"><div class="eyebrow">03 · Подключение сервисов</div><details id="apiSettings" style="border:1px solid var(--line);border-radius:12px;padding:11px;background:var(--bg)"><summary style="cursor:pointer;font-size:12px;font-weight:800">Ключ OpenRouteService (HeiGIT)</summary><label style="display:block;font-size:11px;margin:10px 0 5px;color:var(--muted)">HeiGIT / OpenRouteService API key</label><input class="field" id="orsKey" type="password" autocomplete="off" placeholder="Вставьте ORS API key"><label style="display:block;font-size:11px;margin:10px 0 5px;color:var(--muted)">CARTO API key больше не требуется для подложки карты</label><input class="field" id="cartoKey" type="password" autocomplete="off" placeholder="Не требуется"><button class="btn soft wide" id="saveApiBtn" style="margin-top:9px">Сохранить ключи на этом устройстве</button><p class="hint">Ключи хранятся только в локальном хранилище браузера, не в файле сайта. Ключ нужен для пеших маршрутов через HeiGIT OpenRouteService. Он хранится локально в браузере и не встраивается в HTML. Подложка OpenStreetMap, поиск Nominatim и шумовые данные Overpass работают без ключа, но имеют ограничения публичных сервисов. Старый ключ, ранее отправленный в чат и встроенный в предыдущую сборку, рекомендуется отозвать и создать новый.</p></details></section>
  <section class="section"><div class="eyebrow">04 · Настроить тишину</div><div class="range-row"><span>Чувствительность к шумовым отметкам</span><output id="sensitivityValue">Средняя</output></div><input type="range" min="1" max="3" value="2" id="sensitivity"><p class="hint">Учитываются только ваши отметки шума. Это не измерение децибел и не акустическая карта города.</p><div class="actions"><button class="btn warn" id="reportBtn">＋ Отметить шум на карте</button><button class="btn plain" id="autoNoiseBtn">⚡ Найти шумовые зоны автоматически</button><button class="btn plain" id="clearReportsBtn">Очистить мои отметки</button></div></section>
  <div class="tabs"><button class="tab active" data-tab="places">Места</button><button class="tab" data-tab="favorites">Избранное</button><button class="tab" data-tab="reports">Шумовые отметки</button></div><div class="list" id="listArea"><div class="empty">Загрузка карты мест…</div></div>
  <footer class="foot">Данные карты © OpenStreetMap contributors. QuietWalk — независимый проект. Маршруты и оценки носят ориентировочный характер; проверяйте дорожные условия на месте.</footer>
@@ -39,7 +39,7 @@ if(!window.L){
 }
 const $=id=>document.getElementById(id);const store={get(k,d){try{return JSON.parse(localStorage.getItem('qwmax_'+k))??d}catch{return d}},set(k,v){try{localStorage.setItem('qwmax_'+k,JSON.stringify(v))}catch{}}};
 let map,lightLayer,darkLayer,points=[],pointMarkers=[],routeLayer=null,placeLayer=null,reportLayers=[],autoReports=[],places=[],favorites=store.get('favorites',[]),reports=store.get('reports',[]),reportMode=false,activeTab='places',lastRoute=null,searchMarker=null,toastTimer,watchId=null,gpsMarker=null,navActive=false,lastNavVoice=0;
-let orsKey=store.get('orsKey','eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjdlYjNiM2NjNjkzNDQ4ZmQ4ZjFiM2VkODNmZDA0NzhjIiwiaCI6Im11cm11cjY0In0='),cartoKey=store.get('cartoKey','');
+let orsKey=store.get('orsKey',''),cartoKey=store.get('cartoKey','');
 const sensitivityNames={1:'Мягкая',2:'Средняя',3:'Строгая'};
 // Рабочая область QuietWalk: Краснодарский край (приближённый ограничивающий прямоугольник).
 const KRAI_BOUNDS={south:43.30,north:47.90,west:36.50,east:41.90};
@@ -67,8 +67,8 @@ async function getFootRoute(coords){
   if(orsKey){
     try{
       const body={coordinates:coords,instructions:false,preference:'recommended'};const polygons=avoidPolygons();if(polygons)body.options={avoid_polygons:polygons};
-      let res=await fetch('https://api.openrouteservice.org/v2/directions/foot-walking/geojson',{method:'POST',headers:{'Authorization':orsKey,'Content-Type':'application/json','Accept':'application/geo+json, application/json'},body:JSON.stringify(body)});
-      if(!res.ok){const detail=await res.text();if(polygons){delete body.options;res=await fetch('https://api.openrouteservice.org/v2/directions/foot-walking/geojson',{method:'POST',headers:{'Authorization':orsKey,'Content-Type':'application/json','Accept':'application/geo+json, application/json'},body:JSON.stringify(body)})}if(!res.ok)throw Error('OpenRouteService: '+res.status+' '+(detail||res.statusText))}
+      let res=await fetch('https://api.heigit.org/openrouteservice/v2/directions/foot-walking/geojson',{method:'POST',headers:{'Authorization':orsKey,'Content-Type':'application/json','Accept':'application/geo+json, application/json'},body:JSON.stringify(body)});
+      if(!res.ok){const detail=await res.text();if(polygons){delete body.options;res=await fetch('https://api.heigit.org/openrouteservice/v2/directions/foot-walking/geojson',{method:'POST',headers:{'Authorization':orsKey,'Content-Type':'application/json','Accept':'application/geo+json, application/json'},body:JSON.stringify(body)})}if(!res.ok)throw Error('OpenRouteService: '+res.status+' '+(detail||res.statusText))}
       const data=await res.json(),f=data.features?.[0];if(!f?.geometry?.coordinates?.length)throw Error('ORS не вернул маршрут');
       const route={geometry:f.geometry,distance:f.properties?.summary?.distance,duration:f.properties?.summary?.duration};
       if(!routeInsideKrai(route))throw Error('ORS вернул маршрут за пределами Краснодарского края');
@@ -78,7 +78,7 @@ async function getFootRoute(coords){
   // Резервный маршрутизатор использует формат OSRM lon,lat. Результат проверяется с небольшим запасом у границы региона.
   const path=coords.map(c=>c[0]+','+c[1]).join(';');
   const url='https://routing.openstreetmap.de/routed-foot/route/v1/driving/'+path+'?overview=full&geometries=geojson&steps=false';
-  const res=await fetch(url);if(!res.ok)throw Error('Пешеходный маршрутизатор вернул ошибку ('+res.status+')'+(orsError?'; ORS: '+orsError.message:''));
+  const res=await fetch(url,{signal:AbortSignal.timeout(22000)});if(!res.ok)throw Error('Пешеходный маршрутизатор вернул ошибку ('+res.status+')'+(orsError?'; HeiGIT: '+orsError.message:''));
   const data=await res.json();if(data.code!=='Ok'||!data.routes?.length)throw Error('Не удалось проложить пеший путь в Краснодарском крае');
   const route=data.routes[0];if(!routeInsideKrai(route))throw Error('Сервис прокладки вернул маршрут далеко за пределами Краснодарского края. Он отклонён. Проверьте точки и попробуйте ещё раз.');
   return route;
@@ -102,17 +102,17 @@ async function buildRoute(quiet){
    const dx=b.lng-a.lng,dy=b.lat-a.lat,len=Math.hypot(dx,dy)||1;
    // Разные промежуточные точки заставляют маршрутизатор искать реальные обходные варианты,
    // а не повторно запрашивать тот же кратчайший путь.
-   const offsets=[0.0015,0.0025,0.0038,0.0052,0.0065];
+   const offsets=[0.0025,0.005];
    for(const off of offsets){
     for(const sign of [-1,1]){
      const mid=L.latLng((a.lat+b.lat)/2+sign*dx/len*off,(a.lng+b.lng)/2-sign*dy/len*off);
      if(!inKrasnodarKrai(mid.lat,mid.lng))continue;
-     try{const r=await getFootRoute([start,[mid.lng,mid.lat],finish]);if(routeInsideKrai(r)&&!candidates.some(x=>Math.abs(x.distance-r.distance)<15&&x.geometry.coordinates.length===r.geometry.coordinates.length))candidates.push(r)}catch(e){console.warn('Quiet candidate rejected:',e.message)}
+     try{await new Promise(resolve=>setTimeout(resolve,1100));const r=await getFootRoute([start,[mid.lng,mid.lat],finish]);if(routeInsideKrai(r)&&!candidates.some(x=>Math.abs(x.distance-r.distance)<15&&x.geometry.coordinates.length===r.geometry.coordinates.length))candidates.push(r)}catch(e){console.warn('Quiet candidate rejected:',e.message)}
     }
    }
    const maxDetour=Number($('sensitivity').value)===3?1.65:1.45;
    const acceptable=candidates.filter(r=>r.distance<=base.distance*maxDetour&&r.distance>=base.distance*1.015);
-   if(autoReports.length===0&&reports.length===0)toast('Для оценки тишины нажмите «Найти шумовые зоны автоматически» и затем постройте маршрут повторно.');
+   if(autoReports.length===0&&reports.length===0)toast('Шумовые данные не загружены: тихий вариант будет эвристическим. Нажмите «Найти шумовые зоны автоматически» для более точного выбора.');
    const pool=acceptable.length?acceptable:candidates;
    // Сначала избегаем пользовательских шумовых отметок. При равной оценке предпочитаем
    // умеренный обход, поэтому тихий режим отличается от кратчайшего даже без отметок.
@@ -131,7 +131,7 @@ async function buildRoute(quiet){
   lastRoute={quiet,coords:chosen.geometry.coordinates,distance:chosen.distance,duration:chosen.duration,detour};
   $('routeCard').style.display='block';
   $('routeTitle').textContent=quiet?'🌿 Альтернативный маршрут':'🚶 Кратчайший пеший маршрут';
-  $('routeDesc').textContent=quiet?(reports.length?'Подобран вариант с учётом '+(autoReports.length?'автоматически найденных объектов OpenStreetMap':'ваших шумовых отметок')+'. Это оценка по карте объектов, не измерение децибел.':'Подобран обходной вариант, отличный от кратчайшего, если дорожная сеть позволяет. Без шумовых отметок это эвристика, а не гарантия тишины.'):(orsKey?'Кратчайший пеший вариант через OpenRouteService.':'Кратчайший доступный пеший вариант через резервный маршрутизатор.');
+  $('routeDesc').textContent=quiet?((reports.length||autoReports.length)?'Подобран вариант с учётом '+(autoReports.length?'автоматически найденных объектов OpenStreetMap':'ваших шумовых отметок')+'. Это оценка по карте объектов, не измерение децибел.':'Подобран обходной вариант, отличный от кратчайшего, если дорожная сеть позволяет. Без шумовых отметок это эвристика, а не гарантия тишины.'):(orsKey?'Кратчайший пеший вариант через OpenRouteService.':'Кратчайший доступный пеший вариант через резервный маршрутизатор.');
   $('distance').textContent=km.toFixed(2)+' км';$('duration').textContent=Math.max(1,Math.round(min))+' мин';$('detour').textContent=quiet?'+'+Math.round(detour)+'%':'—';
   setStatus(quiet?'Альтернативный маршрут построен':'Кратчайший пеший маршрут построен');toast('Маршрут готов. Проверьте его перед выходом.');
  }catch(e){console.error(e);toast(e.message+' Попробуйте ещё раз или выберите другие точки.');setStatus('Не удалось построить маршрут')}
