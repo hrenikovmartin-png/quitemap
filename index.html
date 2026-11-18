@@ -170,29 +170,43 @@ async function buildRoute(quiet){
   base=await getFootRoute([start,finish]);
   if(!quiet){chosen=base;}
   else{
-   const candidates=[base];
-   const dx=b.lng-a.lng,dy=b.lat-a.lat,len=Math.hypot(dx,dy)||1;
-   // Разные промежуточные точки заставляют маршрутизатор искать реальные обходные варианты,
-   // а не повторно запрашивать тот же кратчайший путь.
-   const offsets=[0.0025,0.005];
-   for(const off of offsets){
+   // Короткие прогулки не должны получать искусственные крюки из-за далёких
+   // промежуточных точек. Сначала оставляем базовый пеший маршрут лучшим вариантом.
+   chosen=base;
+   const hasNoiseData=reports.length>0||autoReports.length>0;
+   const baseMeters=Number(base.distance)||0;
+   // На маршрутах короче 500 м генерация waypoint-обходов часто создаёт петли.
+   // Без данных о шуме также не удлиняем путь просто ради отличия от кратчайшего.
+   if(hasNoiseData && baseMeters>=500){
+    const candidates=[base];
+    const dx=b.lng-a.lng,dy=b.lat-a.lat,len=Math.hypot(dx,dy)||1;
+    const latMeters=111320;
+    const lonMeters=111320*Math.cos(((a.lat+b.lat)/2)*Math.PI/180);
+    const straightMeters=Math.hypot(dx*lonMeters,dy*latMeters);
+    // Поперечное смещение: 8% прямого расстояния, но не больше 100 м.
+    // Для небольших прогулок это существенно меньше прежних 250–500 м.
+    const offsetMeters=Math.min(100,Math.max(25,straightMeters*0.08));
+    const offLat=offsetMeters/latMeters,offLon=offsetMeters/Math.max(1,lonMeters);
     for(const sign of [-1,1]){
-     const mid=L.latLng((a.lat+b.lat)/2+sign*dx/len*off,(a.lng+b.lng)/2-sign*dy/len*off);
+     const mid=L.latLng((a.lat+b.lat)/2+sign*dx/len*offLat,(a.lng+b.lng)/2-sign*dy/len*offLon);
      if(!inKrasnodarKrai(mid.lat,mid.lng))continue;
-     try{await new Promise(resolve=>setTimeout(resolve,1100));const r=await getFootRoute([start,[mid.lng,mid.lat],finish]);if(routeInsideKrai(r)&&!candidates.some(x=>Math.abs(x.distance-r.distance)<15&&x.geometry.coordinates.length===r.geometry.coordinates.length))candidates.push(r)}catch(e){console.warn('Quiet candidate rejected:',e.message)}
+     try{
+      await new Promise(resolve=>setTimeout(resolve,1100));
+      const r=await getFootRoute([start,[mid.lng,mid.lat],finish]);
+      const maxExtra=baseMeters<1200?Math.min(180,baseMeters*0.18):Math.min(450,baseMeters*0.28);
+      if(routeInsideKrai(r)&&r.distance>baseMeters&&r.distance-baseMeters<=maxExtra&&
+         !candidates.some(x=>Math.abs(x.distance-r.distance)<20))candidates.push(r);
+     }catch(e){console.warn('Quiet candidate rejected:',e.message)}
     }
+    // Выбираем обход только при заметном улучшении оценки шума.
+    // При равной оценке всегда остаётся более короткий базовый маршрут.
+    const basePenalty=routeNoisePenalty(base);
+    const improved=candidates.slice(1).map(r=>({route:r,penalty:routeNoisePenalty(r)}))
+      .filter(x=>x.penalty<basePenalty-Math.max(8,basePenalty*0.08))
+      .sort((x,y)=>x.penalty-y.penalty || x.route.distance-y.route.distance);
+    if(improved.length)chosen=improved[0].route;
    }
-   const maxDetour=Number($('sensitivity').value)===3?1.65:1.45;
-   const acceptable=candidates.filter(r=>r.distance<=base.distance*maxDetour&&r.distance>=base.distance*1.015);
-   if(autoReports.length===0&&reports.length===0)toast('Шумовые данные не загружены: тихий вариант будет эвристическим. Нажмите «Найти шумовые зоны автоматически» для более точного выбора.');
-   const pool=acceptable.length?acceptable:candidates;
-   // Сначала избегаем пользовательских шумовых отметок. При равной оценке предпочитаем
-   // умеренный обход, поэтому тихий режим отличается от кратчайшего даже без отметок.
-   chosen=pool.sort((x,y)=>{
-    const noiseDiff=routeNoisePenalty(x)-routeNoisePenalty(y);
-    if(Math.abs(noiseDiff)>1)return noiseDiff;
-    return y.distance-x.distance;
-   })[0];
+   if(!hasNoiseData)toast('Шумовые отметки не загружены: выбран обычный пеший путь без искусственных обходов.');
    detour=Math.max(0,(chosen.distance/base.distance-1)*100);
   }
   if(!routeInsideKrai(chosen))throw Error('Полученный маршрут выходит за пределы Краснодарского края и был отменён');
