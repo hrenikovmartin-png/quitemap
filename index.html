@@ -14,17 +14,51 @@
 .voice-prompt{position:fixed;z-index:3000;top:18px;left:50%;transform:translateX(-50%);width:min(440px,calc(100vw - 28px));padding:13px 16px;border:1px solid #dce9df;border-radius:16px;background:#fffffff2;color:#193629;box-shadow:0 18px 55px #120a1f24;text-align:center;backdrop-filter:blur(14px)}.voice-prompt strong{display:block;font-size:13px}.voice-prompt p{margin:5px 0 9px;font-size:11px;color:#63756a}.voice-prompt button{border:0;border-radius:11px;padding:10px 16px;background:#c2185b;color:white;font:700 12px Manrope, sans-serif}.voice-prompt.hidden{display:none}.dark .voice-prompt{background:#1e1630;color:#efe8fa;border-color:#3a2d58}.dark .voice-prompt p{color:#c9b9e3}
 @media(max-width:850px){.voice-prompt{top:50%;left:50%;transform:translate(-50%,-50%);padding:18px}.voice-prompt strong{font-size:14px}.voice-prompt p{font-size:12px}}.popup-title{font-weight:800;margin-bottom:4px}.popup-actions{display:flex;gap:6px;margin-top:9px}.popup-actions button{border:0;border-radius:8px;padding:7px 9px;background:#e4f3e8;color:#c2185b;font-weight:700}.dark{--bg:#0d0814;--panel:#161022;--ink:#efe8fa;--muted:#a899c0;--line:#2a2040;--green:#b58cff;--green2:#2a1f45;--accent:#7c4dff;--shadow:0 14px 42px #0007}.dark .intro{background:linear-gradient(135deg,#2a1f45,#3a1f5c)}.dark .intro p{color:#c9b9e3}.dark .routecard{background:#1e1630;border-color:#3a2d58}.dark .routecard p{color:#c9b9e3}.dark .stat{background:#1e1630;border-color:#3a2d58}.dark .mapbadge,.dark .maptools button,.dark .legend{background:#1e1630;color:#efe8fa;border-color:#3a2d58}.dark .leaflet-popup-content-wrapper,.dark .leaflet-popup-tip{background:#1e1630;color:#efe8fa}
 @media(max-width:850px){#app{grid-template-columns:1fr;grid-template-rows:minmax(300px,48vh) 1fr;overflow:auto;height:100dvh}.mapwrap{grid-row:1;min-height:300px}.side{grid-row:2;border-right:0;border-top:1px solid var(--line);overflow:visible}.brand{padding:14px 16px 10px}.intro{margin:0 14px 13px}.section{padding:0 14px 14px}.tabs{padding:0 14px 10px}.list{padding:0 14px 18px}.foot{padding:10px 14px}.legend{bottom:10px;left:10px}.maptop{top:10px;left:10px;right:10px}.mapbadge{font-size:10px;padding:8px 10px}.maptools button{padding:8px 10px;font-size:11px}}
+
+/* polish */
+html{scroll-behavior:smooth}body{-webkit-font-smoothing:antialiased;line-height:1.45}
+.side{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.brand{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--line)}
+.logo{box-shadow:0 8px 20px #c2185b40}
+.eyebrow{font-size:12px;letter-spacing:.1px;text-transform:none;color:var(--ink);font-weight:800;margin:4px 0 10px}
+.intro{border:1px solid var(--line)}
+.section{padding-bottom:20px}
+.btn{min-height:46px;border-radius:14px;transition:transform .12s,box-shadow .2s,background .2s}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:linear-gradient(135deg,#e0457f,#c2185b);color:#fff;box-shadow:0 8px 20px #c2185b38}
+.btn.primary:hover{box-shadow:0 10px 26px #c2185b55}
+.dark .btn.primary{background:linear-gradient(135deg,#8b5cf6,#6d3df0);box-shadow:0 8px 22px #6d3df055}
+.btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+.point,.stat,.routecard,.intro{border-radius:16px}
+.iconbtn{width:auto;min-width:40px;padding:0 12px;font-size:12px;font-weight:800;white-space:nowrap}
+.voice-prompt{background:var(--panel);color:var(--ink);border-color:var(--line)}
+.voice-prompt strong{color:var(--ink)}
+.dark .voice-prompt{background:#1e1630;color:#efe8fa;border-color:#3a2d58}
+.dark .intro,.dark .point{border-color:#2a2040}
+.dark #map{background:#0d0814}
+.maptools button,.mapbadge,.legend{backdrop-filter:blur(8px)}
+:focus-visible{outline:3px solid #ff9ec3;outline-offset:2px}
+.dark :focus-visible{outline-color:#b58cff}
+@media(max-width:850px){
+#app{grid-template-rows:minmax(260px,42vh) 1fr}
+.side{margin-top:-18px;border-radius:22px 22px 0 0;border-top:0;box-shadow:0 -12px 34px #c2185b22;position:relative}
+.dark .side{box-shadow:0 -12px 34px #0009}
+.brand{border-radius:22px 22px 0 0}
+.btn{min-height:50px;font-size:14px}
+.actions{gap:10px}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body><div id="app">
 <aside class="side">
- <header class="brand"><div class="brandmark"><div class="logo"></div><div><h1>QuietWalk <span style="color:var(--green)">MAX</span></h1><small>Маршруты, в которых легче дышать</small></div></div><button class="iconbtn" id="themeBtn" title="Сменить тему">◐</button></header>
+ <header class="brand"><div class="brandmark"><div class="logo"></div><div><h1>QuietWalk <span style="color:var(--green)">MAX</span></h1><small>Маршруты, в которых легче дышать</small></div></div><button class="iconbtn" id="themeBtn" title="Сменить тему">Тема</button></header>
  <div class="intro"><strong>Город можно пройти тише.</strong><p>Карта, поиск и маршруты ограничены Краснодарским краем. Укажите начало и конец прогулки — QuietWalk сравнит пешеходные варианты и постарается обойти отмеченные шумные места.</p></div>
- <section class="section"><div class="eyebrow">01 · Найти место</div><div class="search"><input id="searchInput" placeholder="Адрес, улица или место…" autocomplete="off"><button class="btn primary" id="searchBtn">Найти</button></div><div class="suggestions" id="suggestions"></div><div class="actions"><button class="btn soft" id="favoritePlaceBtn">Добавить место в избранное</button><button class="btn warn" id="quickNoiseBtn">Добавить шумовую отметку</button></div><p class="hint">Поиск OpenStreetMap ограничен Краснодарским краем. Выберите результат, чтобы поставить точку на карте.</p></section>
- <section class="section"><div class="eyebrow">02 · Ваш маршрут</div><div class="points"><div class="point"><b>А · СТАРТ</b><span id="startLabel">Нажмите на карту</span></div><div class="point"><b>Б · ФИНИШ</b><span id="endLabel">Нажмите на карту</span></div></div><div class="actions"><button class="btn primary" id="quietBtn"> Найти тихий путь</button><button class="btn soft" id="fastBtn">Прямой пеший</button><button class="btn plain" id="geoBtn">◎ Моё местоположение</button><button class="btn plain" id="shareBtn">↗ Поделиться</button><button class="btn primary wide" id="startNavBtn">▶ Начать GPS-навигацию</button><button class="btn warn wide" id="stopNavBtn" disabled>■ Завершить навигацию</button><button class="btn plain wide" id="resetBtn">Сбросить маршрут</button></div>
+ <section class="section"><div class="eyebrow">Найти место</div><div class="search"><input id="searchInput" placeholder="Адрес, улица или место…" autocomplete="off"><button class="btn primary" id="searchBtn">Найти</button></div><div class="suggestions" id="suggestions"></div><div class="actions"><button class="btn soft" id="favoritePlaceBtn">Добавить место в избранное</button><button class="btn warn" id="quickNoiseBtn">Добавить шумовую отметку</button></div><p class="hint">Поиск OpenStreetMap ограничен Краснодарским краем. Выберите результат, чтобы поставить точку на карте.</p></section>
+ <section class="section"><div class="eyebrow">Ваш маршрут</div><div class="points"><div class="point"><b>Старт</b><span id="startLabel">Нажмите на карту</span></div><div class="point"><b>Финиш</b><span id="endLabel">Нажмите на карту</span></div></div><div class="actions"><button class="btn primary" id="quietBtn">Найти тихий путь</button><button class="btn soft" id="fastBtn">Прямой пеший</button><button class="btn plain" id="geoBtn">Моё местоположение</button><button class="btn plain" id="shareBtn">Поделиться</button><button class="btn primary wide" id="startNavBtn">Начать GPS-навигацию</button><button class="btn warn wide" id="stopNavBtn" disabled>Завершить навигацию</button><button class="btn plain wide" id="resetBtn">Сбросить маршрут</button></div>
  <div class="navstatus" id="navStatus">GPS-навигация выключена</div><div class="routecard" id="routeCard"><h3 id="routeTitle">Маршрут готов</h3><p id="routeDesc"></p><div class="stats"><div class="stat"><b id="distance">—</b><small>расстояние</small></div><div class="stat"><b id="duration">—</b><small>в пути</small></div><div class="stat"><b id="detour">—</b><small>обход</small></div></div><div class="actions" style="margin-top:12px"><button class="btn soft" id="downloadGpxBtn">Скачать GPX</button><button class="btn plain" id="downloadGeoBtn">Скачать GeoJSON</button></div></div>
  </section>
- <section class="section"><div class="eyebrow">03 · Настроить тишину</div><div class="range-row"><span>Чувствительность к шумовым отметкам</span><output id="sensitivityValue">Средняя</output></div><input type="range" min="1" max="3" value="2" id="sensitivity"><p class="hint">Модель учитывает класс дорог, железные дороги, промышленные и коммерческие зоны, стадионы и шумные заведения с весом по типу источника. Это расчётная оценка по OpenStreetMap, не измерение децибел.</p><div class="actions"><button class="btn warn" id="reportBtn">＋ Отметить шум на карте</button><button class="btn plain" id="autoNoiseBtn"> Найти шумовые зоны автоматически</button><button class="btn plain" id="clearReportsBtn">Очистить мои отметки</button></div></section>
+ <section class="section"><div class="eyebrow">Настроить тишину</div><div class="range-row"><span>Чувствительность к шумовым отметкам</span><output id="sensitivityValue">Средняя</output></div><input type="range" min="1" max="3" value="2" id="sensitivity"><p class="hint">Модель учитывает класс дорог, железные дороги, промышленные и коммерческие зоны, стадионы и шумные заведения с весом по типу источника. Это расчётная оценка по OpenStreetMap, не измерение децибел.</p><div class="actions"><button class="btn warn" id="reportBtn">＋ Отметить шум на карте</button><button class="btn plain" id="autoNoiseBtn"> Найти шумовые зоны автоматически</button><button class="btn plain" id="clearReportsBtn">Очистить мои отметки</button></div></section>
  <div class="tabs"><button class="tab active" data-tab="places">Места</button><button class="tab" data-tab="favorites">Избранное</button><button class="tab" data-tab="reports">Шумовые отметки</button></div><div class="list" id="listArea"><div class="empty">Загрузка карты мест…</div></div>
  <footer class="foot">Данные карты © OpenStreetMap contributors. QuietWalk — независимый проект. Маршруты и оценки носят ориентировочный характер; проверяйте дорожные условия на месте.</footer>
 </aside>
