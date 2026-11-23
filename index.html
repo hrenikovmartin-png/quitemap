@@ -149,7 +149,7 @@ async function getFootRoute(coords){
   }
   // Резервный маршрутизатор использует формат OSRM lon,lat. Результат проверяется с небольшим запасом у границы региона.
   const path=coords.map(c=>c[0]+','+c[1]).join(';');
-  const url='https://routing.openstreetmap.de/routed-foot/route/v1/driving/'+path+'?overview=full&geometries=geojson&steps=true';
+  const url='https://routing.openstreetmap.de/routed-foot/route/v1/foot/'+path+'?overview=full&geometries=geojson&steps=true';
   const res=await fetch(url,{signal:AbortSignal.timeout(22000)});if(!res.ok)throw Error('Пешеходный маршрутизатор вернул ошибку ('+res.status+')'+(orsError?'; HeiGIT: '+orsError.message:''));
   const data=await res.json();if(data.code!=='Ok'||!data.routes?.length)throw Error('Не удалось проложить пеший путь в Краснодарском крае');
   const route=data.routes[0];route.steps=(route.legs||[]).flatMap(l=>l.steps||[]).map(st=>{const first=st.geometry?.coordinates?.[0];let idx=0;if(first){let best=Infinity;route.geometry.coordinates.forEach((c,i)=>{const d=(c[0]-first[0])**2+(c[1]-first[1])**2;if(d<best){best=d;idx=i}})}const m=st.maneuver||{};const turn=m.type==='turn'||m.type==='roundabout'||m.type==='rotary';return {instruction:turn?'Через несколько метров '+(m.modifier==='left'?'поверните налево':m.modifier==='right'?'поверните направо':m.modifier==='slight left'?'держитесь левее':m.modifier==='slight right'?'держитесь правее':'продолжайте по маршруту'):(st.name?'Продолжайте по улице '+st.name:'Продолжайте движение'),way_points:[idx,idx]}}).filter(st=>st.instruction);if(!routeInsideKrai(route))throw Error('Сервис прокладки вернул маршрут далеко за пределами Краснодарского края. Он отклонён. Проверьте точки и попробуйте ещё раз.');
@@ -159,55 +159,59 @@ function haversine(a,b){const R=6371000,toRad=x=>x*Math.PI/180,dLat=toRad(b[1]-a
 function minDistanceToReports(coords){if(!reports.length)return 99999;let min=99999;for(let i=0;i<coords.length;i+=Math.max(1,Math.floor(coords.length/80))){for(const r of reports)min=Math.min(min,haversine(coords[i],[r.lon,r.lat]))}return min}
 function routeNoisePenalty(route){const coords=route.geometry.coordinates;const radius=Number($('sensitivity').value);let penalty=0;for(const r of [...reports,...autoReports]){const d=minDistanceToReportsForOne(coords,r);const threshold=radius===1?90:radius===2?170:280;if(d<threshold){const weight=r.weight||1;penalty+=(threshold-d)*weight}}return penalty}
 async function loadAutomaticNoise(){if(points.length!==2){toast('Сначала выберите начало и конец маршрута');return}const a=points[0],b=points[1],south=Math.max(KRAI_BOUNDS.south,Math.min(a.lat,b.lat)-0.035),north=Math.min(KRAI_BOUNDS.north,Math.max(a.lat,b.lat)+0.035),west=Math.max(KRAI_BOUNDS.west,Math.min(a.lng,b.lng)-0.045),east=Math.min(KRAI_BOUNDS.east,Math.max(a.lng,b.lng)+0.045);const bbox=[south,west,north,east].join(',');const q='[out:json][timeout:25];(way[highway~"motorway|trunk|primary|secondary|tertiary"]('+bbox+');way[railway~"rail|tram"]('+bbox+');way[landuse=industrial]('+bbox+');way[landuse=commercial]('+bbox+');way[leisure=stadium]('+bbox+');node[amenity~"fuel|nightclub|bar"]('+bbox+'););out center tags 250;';$('autoNoiseBtn').disabled=true;setStatus('Загружаем шумовые зоны из OpenStreetMap…');try{let response;for(const host of ['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter']){try{response=await fetch(host+'?data='+encodeURIComponent(q));if(response.ok)break}catch(e){}}if(!response||!response.ok)throw Error('Сервис шумовых данных временно недоступен');const data=await response.json();autoReports=data.elements.map(el=>{const lat=el.lat??el.center?.lat,lon=el.lon??el.center?.lon,t=el.tags||{};let reason='Дорога',weight=0.7;if(t.railway)reason='Железная дорога',weight=2.1;else if(t.landuse==='industrial')reason='Промышленная зона',weight=2.0;else if(t.landuse==='commercial')reason='Коммерческая зона',weight=0.8;else if(t.leisure==='stadium')reason='Стадион',weight=1.5;else if(t.amenity==='fuel')reason='Автозаправка',weight=1.1;else if(t.amenity==='nightclub'||t.amenity==='bar')reason='Ночное заведение',weight=1.3;if(t.highway==='motorway'||t.highway==='trunk')weight=2.0;else if(t.highway==='primary')weight=1.6;else if(t.highway==='secondary')weight=1.25;else if(t.highway==='tertiary')weight=0.9;return {lat,lon,reason,weight,highway:t.highway||null,automatic:true}}).filter(x=>Number.isFinite(x.lat)&&Number.isFinite(x.lon)&&inKrasnodarKrai(x.lat,x.lon));drawReports();setStatus('Автоматически найдено шумовых объектов: '+autoReports.length);toast('Найдено потенциальных источников шума: '+autoReports.length+'. Это модель по типу объектов и дорог, не показания в дБ. Теперь нажмите «Найти тихий путь».')}catch(e){toast('Не удалось загрузить шумовые зоны: '+e.message)}finally{$('autoNoiseBtn').disabled=false}}
-function minDistanceToReportsForOne(coords,r){let min=99999;for(let i=0;i<coords.length;i+=Math.max(1,Math.floor(coords.length/100)))min=Math.min(min,haversine(coords[i],[r.lon,r.lat]));return min}
+function minDistanceToReportsForOne(coords,r){let min=99999;for(let i=0;i<coords.length;i++)min=Math.min(min,haversine(coords[i],[r.lon,r.lat]));return min}
 async function buildRoute(quiet){
  if(points.length===2&&!points.every(p=>inKrasnodarKrai(p.lat,p.lng))){toast('Обе точки должны быть в Краснодарском крае');return}
  if(points.length!==2){toast('Сначала выберите на карте начало и конец');return}
- setStatus(quiet?'Ищем альтернативный спокойный путь…':'Строим пеший маршрут…');$('quietBtn').disabled=$('fastBtn').disabled=true;
+ // Quiet route automatically attempts to load noise-source data instead of silently
+ // behaving like the ordinary shortest pedestrian route.
+ if(quiet&&!reports.length&&!autoReports.length)await loadAutomaticNoise();
+ setStatus(quiet?'Сравниваем маршруты с шумовой моделью…':'Строим кратчайший пеший маршрут…');
+ $('quietBtn').disabled=$('fastBtn').disabled=true;
  try{
   const a=points[0],b=points[1],start=[a.lng,a.lat],finish=[b.lng,b.lat];
   let chosen,base,detour=0;
   base=await getFootRoute([start,finish]);
   if(!quiet){chosen=base;}
   else{
-   // Короткие прогулки не должны получать искусственные крюки из-за далёких
-   // промежуточных точек. Сначала оставляем базовый пеший маршрут лучшим вариантом.
    chosen=base;
    const hasNoiseData=reports.length>0||autoReports.length>0;
    const baseMeters=Number(base.distance)||0;
-   // На маршрутах короче 500 м генерация waypoint-обходов часто создаёт петли.
-   // Без данных о шуме также не удлиняем путь просто ради отличия от кратчайшего.
-   if(hasNoiseData && baseMeters>=500){
+   // Noise-aware candidates only on walks long enough to justify a deviation.
+   if(hasNoiseData&&baseMeters>=350){
     const candidates=[base];
     const dx=b.lng-a.lng,dy=b.lat-a.lat,len=Math.hypot(dx,dy)||1;
-    const latMeters=111320;
-    const lonMeters=111320*Math.cos(((a.lat+b.lat)/2)*Math.PI/180);
+    const latMeters=111320,lonMeters=111320*Math.cos(((a.lat+b.lat)/2)*Math.PI/180);
     const straightMeters=Math.hypot(dx*lonMeters,dy*latMeters);
-    // Поперечное смещение: 8% прямого расстояния, но не больше 100 м.
-    // Для небольших прогулок это существенно меньше прежних 250–500 м.
-    const offsetMeters=Math.min(100,Math.max(25,straightMeters*0.08));
+    // Candidate corridors at several offsets, but never more than 120m sideways.
+    const offsetMeters=Math.min(120,Math.max(35,straightMeters*0.10));
     const offLat=offsetMeters/latMeters,offLon=offsetMeters/Math.max(1,lonMeters);
-    for(const sign of [-1,1]){
-     const mid=L.latLng((a.lat+b.lat)/2+sign*dx/len*offLat,(a.lng+b.lng)/2-sign*dy/len*offLon);
+    const fractions=[0.38,0.5,0.62];
+    const seen=[];
+    for(const frac of fractions)for(const sign of [-1,1]){
+     const mid=L.latLng(a.lat+(b.lat-a.lat)*frac+sign*dx/len*offLat,
+       a.lng+(b.lng-a.lng)*frac-sign*dy/len*offLon);
      if(!inKrasnodarKrai(mid.lat,mid.lng))continue;
+     if(seen.some(p=>map.distance(p,mid)<35))continue;seen.push(mid);
      try{
-      await new Promise(resolve=>setTimeout(resolve,1100));
       const r=await getFootRoute([start,[mid.lng,mid.lat],finish]);
-      const maxExtra=baseMeters<1200?Math.min(180,baseMeters*0.18):Math.min(450,baseMeters*0.28);
+      const maxExtra=baseMeters<1200?Math.min(220,baseMeters*0.20):Math.min(500,baseMeters*0.30);
       if(routeInsideKrai(r)&&r.distance>baseMeters&&r.distance-baseMeters<=maxExtra&&
-         !candidates.some(x=>Math.abs(x.distance-r.distance)<20))candidates.push(r);
+         !candidates.some(x=>Math.abs(x.distance-r.distance)<25))candidates.push(r);
      }catch(e){console.warn('Quiet candidate rejected:',e.message)}
     }
-    // Выбираем обход только при заметном улучшении оценки шума.
-    // При равной оценке всегда остаётся более короткий базовый маршрут.
     const basePenalty=routeNoisePenalty(base);
-    const improved=candidates.slice(1).map(r=>({route:r,penalty:routeNoisePenalty(r)}))
-      .filter(x=>x.penalty<basePenalty-Math.max(8,basePenalty*0.08))
-      .sort((x,y)=>x.penalty-y.penalty || x.route.distance-y.route.distance);
-    if(improved.length)chosen=improved[0].route;
+    // A small length cost discourages unnecessary detours. Candidates must improve
+    // noise score materially; otherwise the shortest route remains the honest choice.
+    const baseScore=basePenalty+baseMeters*0.0012;
+    const scored=candidates.slice(1).map(route=>({route,penalty:routeNoisePenalty(route),
+      score:routeNoisePenalty(route)+route.distance*0.0012}))
+      .filter(x=>x.penalty<basePenalty-Math.max(6,basePenalty*0.06)&&x.score<baseScore)
+      .sort((x,y)=>x.score-y.score);
+    if(scored.length)chosen=scored[0].route;
    }
-   if(!hasNoiseData)toast('Шумовые отметки не загружены: выбран обычный пеший путь без искусственных обходов.');
    detour=Math.max(0,(chosen.distance/base.distance-1)*100);
+   if(!hasNoiseData)toast('Источники шума не загрузились. Показан обычный пеший маршрут; тишина не оценена.');
   }
   if(!routeInsideKrai(chosen))throw Error('Полученный маршрут выходит за пределы Краснодарского края и был отменён');
   if(routeLayer)map.removeLayer(routeLayer);
@@ -216,10 +220,10 @@ async function buildRoute(quiet){
   const km=chosen.distance/1000,min=chosen.duration/60;
   lastRoute={quiet,coords:chosen.geometry.coordinates,distance:chosen.distance,duration:chosen.duration,detour,steps:chosen.steps||[]};
   $('routeCard').style.display='block';
-  $('routeTitle').textContent=quiet?' Альтернативный маршрут':' Кратчайший пеший маршрут';
-  $('routeDesc').textContent=quiet?((reports.length||autoReports.length)?'Подобран вариант с учётом '+(autoReports.length?'автоматически найденных объектов OpenStreetMap':'ваших шумовых отметок')+'. Это оценка по карте объектов, не измерение децибел.':'Подобран обходной вариант, отличный от кратчайшего, если дорожная сеть позволяет. Без шумовых отметок это эвристика, а не гарантия тишины.'):(orsKey?'Кратчайший пеший вариант через OpenRouteService.':'Кратчайший доступный пеший вариант через резервный маршрутизатор.');
+  $('routeTitle').textContent=quiet?'Тихий маршрут (оценка)':'Кратчайший пеший маршрут';
+  $('routeDesc').textContent=quiet?((reports.length||autoReports.length)?'Выбран вариант по расчётной близости к потенциальным источникам шума и длине. Это оценка по OpenStreetMap, не измерение децибел. Если варианты не дают существенного улучшения, оставлен кратчайший.':'Источники шума не получены, поэтому маршрут совпадает с обычным пешим; это не подтверждённый тихий вариант.'):(orsKey?'Кратчайший пеший вариант через OpenRouteService.':'Кратчайший доступный пеший вариант через резервный маршрутизатор.');
   $('distance').textContent=km.toFixed(2)+' км';$('duration').textContent=Math.max(1,Math.round(min))+' мин';$('detour').textContent=quiet?'+'+Math.round(detour)+'%':'—';
-  setStatus(quiet?'Альтернативный маршрут построен':'Кратчайший пеший маршрут построен');toast('Маршрут готов. Проверьте его перед выходом.');
+  setStatus(quiet?'Тихий маршрут рассчитан (оценка)':'Кратчайший пеший маршрут построен');toast('Маршрут готов. Проверьте его перед выходом.');
  }catch(e){console.error(e);toast(e.message+' Попробуйте ещё раз или выберите другие точки.');setStatus('Не удалось построить маршрут')}
  finally{$('quietBtn').disabled=$('fastBtn').disabled=false}
 }
