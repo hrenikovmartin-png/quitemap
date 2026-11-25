@@ -80,16 +80,25 @@ try {
       fastButton: !!document.getElementById('fastBtn'),
       startNavigationButton: !!document.getElementById('startNavBtn'),
       stopNavigationButton: !!document.getElementById('stopNavBtn'),
-      routeHistoryTab: !!document.querySelector('[data-tab="history"]')
+      routeHistoryTab: !!document.querySelector('[data-tab="history"]'),
+      gpxImportButton: !!document.getElementById('importGpxBtn')
     };
   });
 
-  for (const key of ['serviceWorkerReady', 'manifestLoaded', 'offlineBoundaryCached', 'leafletLoaded', 'mapCreated', 'boundaryHttpOk', 'boundaryGzipOk', 'boundaryHasKrasnodarFeature', 'quietButton', 'fastButton', 'startNavigationButton', 'stopNavigationButton', 'routeHistoryTab']) {
+  for (const key of ['serviceWorkerReady', 'manifestLoaded', 'offlineBoundaryCached', 'leafletLoaded', 'mapCreated', 'boundaryHttpOk', 'boundaryGzipOk', 'boundaryHasKrasnodarFeature', 'quietButton', 'fastButton', 'startNavigationButton', 'stopNavigationButton', 'routeHistoryTab', 'gpxImportButton']) {
     if (!result[key]) throw new Error('Browser check failed: ' + key);
   }
   if (!result.status.includes('Точный контур Краснодарского края загружен')) {
     throw new Error('The application did not accept the Krasnodar Krai boundary: ' + result.status);
   }
+  const validGpx = '<?xml version="1.0"?><gpx version="1.1" creator="QuietWalk" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg><trkpt lat="45.04" lon="38.976"/><trkpt lat="45.041" lon="38.977"/></trkseg></trk></gpx>';
+  await page.setInputFiles('#gpxInput', { name: 'quietwalk-valid.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(validGpx) });
+  await page.waitForFunction(() => document.getElementById('routeTitle')?.textContent.includes('Импортированный GPX-маршрут'), { timeout: 15000 });
+  const outsideGpx = '<?xml version="1.0"?><gpx version="1.1" creator="QuietWalk" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg><trkpt lat="41" lon="29"/><trkpt lat="41.001" lon="29.001"/></trkseg></trk></gpx>';
+  await page.setInputFiles('#gpxInput', { name: 'quietwalk-outside.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(outsideGpx) });
+  await page.waitForFunction(() => document.getElementById('toast')?.textContent.includes('внутри Краснодарского края'), { timeout: 10000 });
+  console.log('PASS: GPX import accepts an in-region route and rejects outside coordinates.');
+
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 45000 });
   await page.waitForFunction(() => !!navigator.serviceWorker?.controller, { timeout: 20000 });
   await page.context().setOffline(true);
