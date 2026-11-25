@@ -294,7 +294,23 @@ async function loadAutomaticNoise(){
   setStatus('Автоданные временно недоступны — ручные отметки продолжают работать');
  }finally{if(button)button.disabled=false}
 }
-function minDistanceToReportsForOne(coords,r){let min=99999;for(let i=0;i<coords.length;i+=Math.max(1,Math.floor(coords.length/100)))min=Math.min(min,haversine(coords[i],[r.lon,r.lat]));return min}
+function minDistanceToReportsForOne(coords,r){
+ if(!Array.isArray(coords)||!coords.length||!Number.isFinite(+r.lat)||!Number.isFinite(+r.lon))return Infinity;
+ const cos=Math.max(0.15,Math.cos((+r.lat)*Math.PI/180));
+ const x=c=>(+c[0]-r.lon)*111320*cos;
+ const y=c=>(+c[1]-r.lat)*110540;
+ let min=Infinity;
+ if(coords.length===1)return Math.hypot(x(coords[0]),y(coords[0]));
+ for(let i=1;i<coords.length;i++){
+  const a=coords[i-1],b=coords[i];
+  const ax=x(a),ay=y(a),dx=x(b)-ax,dy=y(b)-ay;
+  const den=dx*dx+dy*dy;
+  const t=den?Math.max(0,Math.min(1,-(ax*dx+ay*dy)/den)):0;
+  min=Math.min(min,Math.hypot(ax+t*dx,ay+t*dy));
+  if(min===0)return 0;
+ }
+ return min;
+}
 
 function qwScore(coords){const rs=[...reports,...autoReports];let el=document.getElementById('qwScore');if(!el){el=document.createElement('div');el.id='qwScore';$('routeDesc').after(el)}
 if(!rs.length){el.innerHTML='<div class="qs-t">Индекс тишины: нет данных. Нажмите «Найти шумовые зоны автоматически».</div>';return}
