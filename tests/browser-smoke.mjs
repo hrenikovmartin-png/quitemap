@@ -30,17 +30,23 @@ try {
   });
   browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-  page.on('pageerror', error => errors.push(error.message));
+  page.on('pageerror', error => errors.push('pageerror: ' + error.message));
+  page.on('console', message => { if (message.type() === 'error') errors.push('console: ' + message.text()); });
+  page.on('requestfailed', request => errors.push('request failed: ' + request.url() + ' · ' + (request.failure()?.errorText || 'unknown')));
 
   const response = await page.goto('http://127.0.0.1:4173/index.html', { waitUntil: 'domcontentloaded', timeout: 45000 });
   if (!response?.ok()) throw new Error('index.html did not load successfully');
 
-  await page.waitForFunction(() => {
-    const status = document.getElementById('mapStatus')?.textContent || '';
-    return status.includes('Точный контур Краснодарского края загружен') ||
-      status.includes('Не удалось загрузить точную границу Краснодарского края') ||
-      status.includes('Точная граница Краснодарского края не загружена');
-  }, { timeout: 45000 });
+  try {
+    await page.waitForFunction(() => {
+      const status = document.getElementById('mapStatus')?.textContent || '';
+      return status.includes('Точный контур Краснодарского края загружен') ||
+        status.includes('Не удалось загрузить точную границу Краснодарского края') ||
+        status.includes('Точная граница Краснодарского края не загружена');
+    }, { timeout: 45000 });
+  } catch (error) {
+    throw new Error('Boundary startup timed out. Browser diagnostics: ' + errors.join(' | ') + ' · ' + error.message);
+  }
 
   const result = await page.evaluate(async () => {
     const swReady = await Promise.race([navigator.serviceWorker?.ready.then(registration => !!registration.active).catch(() => false) ?? Promise.resolve(false), new Promise(resolve => setTimeout(() => resolve(false), 20000))]);
