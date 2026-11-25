@@ -136,7 +136,41 @@ if(!gj){
 if(!gj)throw gErr||Error('GeoJSON недоступен');const fs=gj.features||[gj];const candidates=fs.filter(x=>{const p=x.properties||{};const name=[p.shapeName,p.shapeNameAlt,p.NAME_1,p.name,p.NAME,p.region,p.Region,p.admin1Name].filter(Boolean).join(' ');return /krasnodar|краснодар/i.test(name)});const anchorInside=g=>{if(!g)return false;const testPoly=poly=>pointInPolygon(38.976,45.04,poly);return g.type==='Polygon'?testPoly(g.coordinates):g.type==='MultiPolygon'?g.coordinates.some(testPoly):false};const matches=candidates.filter(x=>['Polygon','MultiPolygon'].includes(x.geometry?.type)&&anchorInside(x.geometry));if(!matches.length)throw Error('не найден корректный контур Краснодарского края (контрольная точка Краснодар не попала в полигон; кандидатов: '+candidates.length+')');kraiGeometries=matches.map(x=>x.geometry);kraiGeometry=kraiGeometries[0];const outer=[[-180,-85],[180,-85],[180,85],[-180,85],[-180,-85]];const holes=[];for(const g of kraiGeometries){if(g.type==='Polygon')holes.push(g.coordinates[0]);else if(g.type==='MultiPolygon')for(const poly of g.coordinates)if(poly[0])holes.push(poly[0])}if(!holes.length)throw Error('контур не содержит внешних колец для маски');if(!map.getPane('kraiMaskPane')){map.createPane('kraiMaskPane');map.getPane('kraiMaskPane').style.zIndex='350'}if(kraiMaskLayer)map.removeLayer(kraiMaskLayer);kraiMaskLayer=L.geoJSON({type:'Feature',geometry:{type:'Polygon',coordinates:[outer,...holes]}},{pane:'kraiMaskPane',interactive:false,style:{stroke:false,fillColor:document.body.classList.contains('dark')?'#0d0814':'#fff5f8',fillOpacity:1,fillRule:'evenodd'}}).addTo(map);const layer=L.geoJSON({type:'FeatureCollection',features:matches},{style:{color:'#e0457f',weight:2,opacity:.8,fillColor:'#69ad83',fillOpacity:.035,interactive:false}}).addTo(map);const b=layer.getBounds();KRAI_BOUNDS.south=b.getSouth();KRAI_BOUNDS.north=b.getNorth();KRAI_BOUNDS.west=b.getWest();KRAI_BOUNDS.east=b.getEast();map.setMaxBounds(b);map.fitBounds(b);clampMapCamera();setStatus('Точный контур Краснодарского края загружен ('+matches.length+' частей)');return true}catch(e){console.warn('Boundary load failed; map interactions locked for safety:',e);kraiGeometry=null;kraiGeometries=[];if(kraiMaskLayer&&map){map.removeLayer(kraiMaskLayer);kraiMaskLayer=null}if(map){map.setMaxBounds(L.latLngBounds([KRAI_BOUNDS.south,KRAI_BOUNDS.west],[KRAI_BOUNDS.north,KRAI_BOUNDS.east]));map.dragging.disable();map.touchZoom.disable();map.doubleClickZoom.disable();map.scrollWheelZoom.disable();map.boxZoom.disable();map.keyboard.disable()}setStatus('Не удалось загрузить точную границу Краснодарского края. Карта временно заблокирована, построение маршрутов отключено. Проверьте подключение и обновите страницу.');return false}}
 // Fail-closed: ни одна вершина маршрута не может выходить за рабочую область карты.
 function routeInsideKrai(route){const cs=route?.geometry?.coordinates;if(!Array.isArray(cs)||cs.length<2)return false;for(let i=0;i<cs.length;i++){const c=cs[i];if(!Array.isArray(c)||!Number.isFinite(+c[0])||!Number.isFinite(+c[1])||!inKrasnodarKrai(+c[1],+c[0]))return false;if(i){const prev=cs[i-1],meters=haversine(prev,c),steps=Math.max(1,Math.ceil(meters/50));for(let j=1;j<steps;j++){const t=j/steps,lon=+prev[0]+(+c[0]-+prev[0])*t,lat=+prev[1]+(+c[1]-+prev[1])*t;if(!inKrasnodarKrai(lat,lon))return false}}}return true}
-function clampMapCamera(){if(!map||!kraiGeometry)return;const c=map.getCenter();let lat=Math.max(KRAI_BOUNDS.south,Math.min(KRAI_BOUNDS.north,c.lat)),lng=Math.max(KRAI_BOUNDS.west,Math.min(KRAI_BOUNDS.east,c.lng));if(!inKrasnodarKrai(lat,lng)){const geometries=kraiGeometries.length?kraiGeometries:[kraiGeometry];let best=null,dist=Infinity;for(const g of geometries){const rings=g.type==='Polygon'?[g.coordinates[0]]:g.type==='MultiPolygon'?g.coordinates.map(p=>p[0]):[];for(const ring of rings)for(const pt of ring){const d=(pt[0]-lng)**2*Math.cos(lat*Math.PI/180)**2+(pt[1]-lat)**2;if(d<dist){dist=d;best=pt}}}if(best){lat=best[1];lng=best[0]}}if(lat!==c.lat||lng!==c.lng)map.panTo([lat,lng],{animate:false})}
+function clampMapCamera(){
+ if(!map||!kraiGeometry)return;
+ const center=map.getCenter();
+ if(inKrasnodarKrai(center.lat,center.lng))return;
+ const cos=Math.max(0.15,Math.cos(center.lat*Math.PI/180));
+ const geometries=kraiGeometries.length?kraiGeometries:[kraiGeometry];
+ let best=null,bestDist=Infinity;
+ for(const g of geometries){
+  const polygons=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
+  for(const polygon of polygons){
+   const ring=polygon[0];if(!Array.isArray(ring)||ring.length<3)continue;
+   const avg=ring.reduce((s,p)=>[s[0]+p[0],s[1]+p[1]],[0,0]).map(v=>v/ring.length);
+   for(let i=0;i<ring.length;i++){
+    const a=ring[i],b=ring[(i+1)%ring.length];
+    const dx=(b[0]-a[0])*cos,dy=b[1]-a[1],qx=(center.lng-a[0])*cos,qy=center.lat-a[1];
+    const den=dx*dx+dy*dy,t=den?Math.max(0,Math.min(1,(qx*dx+qy*dy)/den)):0;
+    const edgeLon=a[0]+(b[0]-a[0])*t,edgeLat=a[1]+(b[1]-a[1])*t;
+    const d=(edgeLon-center.lng)**2*cos*cos+(edgeLat-center.lat)**2;
+    if(d>=bestDist)continue;
+    let candidate=null;
+    if(inKrasnodarKrai(edgeLat,edgeLon))candidate=[edgeLat,edgeLon];
+    else{
+     for(const nudge of [0.000001,0.00001,0.0001,0.001,0.005,0.01,0.025,0.05,0.1]){
+      const testLat=edgeLat+(avg[1]-edgeLat)*nudge,testLon=edgeLon+(avg[0]-edgeLon)*nudge;
+      if(inKrasnodarKrai(testLat,testLon)){candidate=[testLat,testLon];break}
+     }
+    }
+    if(candidate){best=candidate;bestDist=d}
+   }
+  }
+ }
+ // Краснодар — безопасная контрольная точка из проверки GeoJSON.
+ if(!best)best=[45.04,38.976];
+ if(map.distance(center,L.latLng(best[0],best[1]))>1)map.panTo(best,{animate:false});
+}
 function toast(msg){const el=$('toast');el.textContent=msg;el.style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.style.display='none',3300)}
 function setStatus(s){$('mapStatus').textContent=s}
 function safeSetView(latlng,zoom){const ll=L.latLng(latlng);if(!inKrasnodarKrai(ll.lat,ll.lng)){toast('Камера QuietWalk ограничена Краснодарским краем');return}map.setView(ll,zoom)}
