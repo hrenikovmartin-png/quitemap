@@ -121,6 +121,24 @@ try {
     await page.context().setOffline(false);
   }
 
+  const mobilePage = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  mobilePage.on('pageerror', error => errors.push('mobile pageerror: ' + error.message));
+  const mobileResponse = await mobilePage.goto('http://127.0.0.1:4173/index.html', { waitUntil: 'domcontentloaded', timeout: 45000 });
+  if (!mobileResponse?.ok()) throw new Error('Mobile page did not load successfully');
+  await mobilePage.waitForFunction(() => (document.getElementById('mapStatus')?.textContent || '').includes('Точный контур Краснодарского края загружен'), { timeout: 45000 });
+  const mobileLayout = await mobilePage.evaluate(() => ({
+    mapHeight: document.querySelector('.mapwrap')?.getBoundingClientRect().height || 0,
+    viewportWidth: window.innerWidth,
+    documentWidth: document.documentElement.scrollWidth,
+    routeHistoryTab: !!document.querySelector('[data-tab="history"]'),
+    gpxImportButton: !!document.getElementById('importGpxBtn')
+  }));
+  if (mobileLayout.mapHeight < 300 || mobileLayout.documentWidth > mobileLayout.viewportWidth + 2 || !mobileLayout.routeHistoryTab || !mobileLayout.gpxImportButton) {
+    throw new Error('Mobile layout check failed: ' + JSON.stringify(mobileLayout));
+  }
+  console.log('QUIETWALK_MOBILE_RESULT=' + JSON.stringify(mobileLayout));
+  await mobilePage.close();
+
   if (errors.length) throw new Error('Uncaught browser errors: ' + errors.join(' | '));
 
   console.log('QUIETWALK_BROWSER_SMOKE_RESULT=' + JSON.stringify(result));
