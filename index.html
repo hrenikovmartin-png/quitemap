@@ -411,7 +411,25 @@ function startNavigation(){
  if(!navigator.geolocation){toast('Браузер не поддерживает GPS');return}
  if(!window.isSecureContext && location.hostname!=='localhost'){toast('Для GPS откройте QuietWalk через HTTPS или localhost');return}
  navSession++;navActive=true;offRouteCount=0;lastGpsFix=null;lastNearestIndex=0;lastTurnIndex=-1;$('startNavBtn').disabled=true;$('stopNavBtn').disabled=false;$('navStatus').style.display='block';$('navStatus').textContent='Ожидаем GPS… Разрешите доступ к местоположению.';setStatus('GPS-навигация активна');speakNav('Навигация началась. Следуйте по отмеченному маршруту.');
- watchId=navigator.geolocation.watchPosition(onNavigationPosition,err=>{if(!navActive)return;const msg=err.code===1?'Нет разрешения на геолокацию':err.code===2?'GPS пока недоступен':'Истекло время ожидания GPS';$('navStatus').textContent=msg;toast(msg)},{enableHighAccuracy:true,maximumAge:1000,timeout:20000});
+ const handleGpsError=err=>{
+  if(!navActive)return;
+  const msg=err.code===1?'Нет разрешения на геолокацию':err.code===2?'GPS пока недоступен':'Истекло время ожидания GPS';
+  if(err.code===1){
+   stopNavigation();
+   $('navStatus').textContent=msg;
+   toast(msg);
+   return;
+  }
+  $('navStatus').textContent=msg;toast(msg);
+ };
+ try{
+  watchId=navigator.geolocation.watchPosition(onNavigationPosition,handleGpsError,{enableHighAccuracy:true,maximumAge:1000,timeout:20000});
+ }catch(error){
+  const msg='Не удалось запустить GPS: '+(error?.message||'ошибка браузера');
+  stopNavigation();
+  $('navStatus').textContent=msg;
+  toast(msg);
+ }
 }
 function createGpsArrow(ll,heading){const html='<div class="gps-arrow-wrap" style="transform:rotate('+heading+'deg)"><div class="gps-arrow"></div></div>';const icon=L.divIcon({className:'gps-direction-icon',html,iconSize:[34,34],iconAnchor:[17,17]});if(!gpsMarker)gpsMarker=L.marker(ll,{icon,zIndexOffset:1000}).addTo(map).bindTooltip('Ваше положение',{direction:'top'});else gpsMarker.setIcon(icon).setLatLng(ll)}
 function nearestRouteSegment(ll,coords){
