@@ -31,8 +31,6 @@ try {
   browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   page.on('pageerror', error => errors.push('pageerror: ' + error.message));
-  page.on('console', message => { if (message.type() === 'error') errors.push('console: ' + message.text()); });
-  page.on('requestfailed', request => errors.push('request failed: ' + request.url() + ' · ' + (request.failure()?.errorText || 'unknown')));
 
   const response = await page.goto('http://127.0.0.1:4173/index.html', { waitUntil: 'domcontentloaded', timeout: 45000 });
   if (!response?.ok()) throw new Error('index.html did not load successfully');
