@@ -3,7 +3,11 @@ name: QuietWalk browser smoke test
 on:
   push:
     branches:
+      - main
       - stage-2-map-guard
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -14,10 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout test branch
+      - name: Checkout tested revision
         uses: actions/checkout@v4
-        with:
-          ref: stage-2-map-guard
 
       - name: Set up Node
         uses: actions/setup-node@v4
