@@ -60,7 +60,7 @@ test('GPS permission denial and synchronous browser errors cleanly stop navigati
 });
 
 test('recent routes are persisted locally and replay is boundary-checked', () => {
-  assert.match(source, /routeHistory=store\.get\('routeHistory',\[\]\)/);
+  assert.match(source, /routeHistory=\(Array\.isArray\(store\.get\('routeHistory',\[\]\)\)/);
   assert.match(source, /store\.set\('routeHistory',routeHistory\)/);
   assert.match(source, /function restoreHistoryRoute\(id\)/);
   assert.match(source, /inKrasnodarKrai\(item\.start\?\.lat,item\.start\?\.lng\)/);
