@@ -220,7 +220,7 @@ async function loadAutomaticNoise(){
  const q='[out:json][timeout:18][maxsize:67108864];(way[highway~"^(motorway|trunk|primary|secondary|tertiary|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"]('+bbox+');way[railway~"^(rail|tram|light_rail|subway)$"]('+bbox+');way[landuse~"^(industrial|commercial)$"]('+bbox+');way[leisure=stadium]('+bbox+');node[amenity~"^(fuel|nightclub|bar)$"]('+bbox+'););out center tags;';
  const button=$('autoNoiseBtn');if(button)button.disabled=true;
  setStatus('Загружаем шумовые зоны из OpenStreetMap…');
- const hosts=['https://maps.mail.ru/osm/tools/overpass/api/interpreter','https://overpass.private.coffee/api/interpreter','https://ovp.dresel.systems/api/interpreter','https://overpass-api.de/api/interpreter'];
+ const hosts=['https://ovp.dresel.systems/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter','https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter'];
  let data=null,lastError='Сервисы Overpass не ответили';
  try{
   for(const host of hosts){
