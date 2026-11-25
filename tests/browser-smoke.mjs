@@ -43,6 +43,11 @@ try {
   }, { timeout: 45000 });
 
   const result = await page.evaluate(async () => {
+    const swReady = await Promise.race([navigator.serviceWorker?.ready.then(registration => !!registration.active).catch(() => false) ?? Promise.resolve(false), new Promise(resolve => setTimeout(() => resolve(false), 20000))]);
+    const manifestResponse = await fetch('manifest.webmanifest');
+    const manifest = manifestResponse.ok ? await manifestResponse.json() : null;
+    const shellCache = await caches.open('quietwalk-shell-v1').catch(() => null);
+    const cachedBoundary = !!(shellCache && await shellCache.match(new URL('krasnodar-krai.geojson.gz.b64', document.baseURI).href));
     const status = document.getElementById('mapStatus')?.textContent || '';
     const boundaryResponse = await fetch('krasnodar-krai.geojson.gz.b64', { cache: 'no-store' });
     const encoded = (await boundaryResponse.text()).trim();
@@ -59,6 +64,9 @@ try {
     });
     return {
       status,
+      serviceWorkerReady: swReady,
+      manifestLoaded: !!manifest && manifest.short_name === 'QuietWalk',
+      offlineBoundaryCached: cachedBoundary,
       leafletLoaded: !!window.L,
       mapCreated: !!document.querySelector('#map.leaflet-container'),
       boundaryHttpOk: boundaryResponse.ok,
@@ -71,7 +79,7 @@ try {
     };
   });
 
-  for (const key of ['leafletLoaded', 'mapCreated', 'boundaryHttpOk', 'boundaryGzipOk', 'boundaryHasKrasnodarFeature', 'quietButton', 'fastButton', 'startNavigationButton', 'stopNavigationButton']) {
+  for (const key of ['serviceWorkerReady', 'manifestLoaded', 'offlineBoundaryCached', 'leafletLoaded', 'mapCreated', 'boundaryHttpOk', 'boundaryGzipOk', 'boundaryHasKrasnodarFeature', 'quietButton', 'fastButton', 'startNavigationButton', 'stopNavigationButton']) {
     if (!result[key]) throw new Error('Browser check failed: ' + key);
   }
   if (!result.status.includes('Точный контур Краснодарского края загружен')) {
@@ -80,7 +88,7 @@ try {
   if (errors.length) throw new Error('Uncaught browser errors: ' + errors.join(' | '));
 
   console.log('QUIETWALK_BROWSER_SMOKE_RESULT=' + JSON.stringify(result));
-  console.log('PASS: Leaflet, map container, local gzip boundary, region feature and navigation controls.');
+  console.log('PASS: app shell, service worker, manifest, cached boundary, Leaflet, region feature and navigation controls.');
 } finally {
   if (browser) await browser.close();
   await new Promise(resolve => server.close(resolve));
