@@ -42,7 +42,7 @@ self.addEventListener('fetch',event=>{
     event.respondWith((async()=>{
       try{
         const response=await fetch(request);
-        if(response.ok){const cache=await caches.open(CACHE_NAME);cache.put(new URL('index.html',BASE).href,response.clone())}
+        if(response.ok){const cache=await caches.open(CACHE_NAME);await cache.put(new URL('index.html',BASE).href,response.clone())}
         return response;
       }catch(error){
         const cached=await caches.match(new URL('index.html',BASE).href);
@@ -59,7 +59,7 @@ self.addEventListener('fetch',event=>{
       const response=await fetch(request);
       if(response.ok||response.type==='opaque'){
         const cache=await caches.open(CACHE_NAME);
-        cache.put(request,response.clone());
+        await cache.put(request,response.clone());
       }
       return response;
     }catch(error){
