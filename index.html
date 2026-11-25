@@ -161,13 +161,14 @@ function clampMapCamera(){
      const offsets=[0.000001,0.00001,0.0001,0.001,0.005,0.01,0.025,0.05];
      const directions=[[1,0],[-1,0],[0,1],[0,-1],[0.707,0.707],[0.707,-0.707],[-0.707,0.707],[-0.707,-0.707]];
      for(const step of offsets){
+      let foundAtThisStep=false;
       for(const dir of directions){
        const testLat=edgeLat+dir[1]*step,testLon=edgeLon+dir[0]*step/ cos;
        if(!inKrasnodarKrai(testLat,testLon))continue;
        const d=(testLon-center.lng)**2*cos*cos+(testLat-center.lat)**2;
-       if(d<bestDist){best=[testLat,testLon];bestDist=d}
+       if(d<bestDist){best=[testLat,testLon];bestDist=d;foundAtThisStep=true}
       }
-      if(best&&bestDist<=edgeDist+0.0000000001)break;
+      if(foundAtThisStep)break;
      }
     }
    }
