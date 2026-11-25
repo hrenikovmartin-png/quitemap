@@ -58,3 +58,12 @@ test('GPS permission denial and synchronous browser errors cleanly stop navigati
   assert.match(source, /catch\(error\)\{\s*const msg='Не удалось запустить GPS:/);
   assert.match(source, /stopNavigation\(\);\s*\$\('navStatus'\)\.textContent=msg/);
 });
+
+test('recent routes are persisted locally and replay is boundary-checked', () => {
+  assert.match(source, /routeHistory=store\.get\('routeHistory',\[\]\)/);
+  assert.match(source, /store\.set\('routeHistory',routeHistory\)/);
+  assert.match(source, /function restoreHistoryRoute\(id\)/);
+  assert.match(source, /inKrasnodarKrai\(item\.start\?\.lat,item\.start\?\.lng\)/);
+  assert.match(source, /inKrasnodarKrai\(item\.end\?\.lat,item\.end\?\.lng\)/);
+  assert.match(source, /slice\(0,12\)/);
+});
