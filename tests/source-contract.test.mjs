@@ -1,0 +1,52 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const source = await readFile(resolve(root, 'index.html'), 'utf8');
+
+test('regional boundary is loaded from the bundled local asset', () => {
+  assert.match(source, /krasnodar-krai\.geojson\.gz\.b64/);
+  assert.match(source, /if\(!gj\)\s*\{\s*throw Error\(/);
+  assert.match(source, /kraiGeometry=null;kraiGeometries=\[\];kraiBoundarySegments=\[\]/);
+});
+
+test('point checks fail closed until the exact geometry is available', () => {
+  assert.match(source, /function inKrasnodarKrai\(lat,lon\)\{if\(!Number\.isFinite\(lat\)\|\|!Number\.isFinite\(lon\)[\s\S]{0,260}!kraiGeometry\)return false/);
+  assert.match(source, /const KRAI_BOUNDS=\{south:43\.30,north:47\.90,west:36\.50,east:41\.90\}/);
+});
+
+test('every router response and final selected route is checked against the region', () => {
+  assert.ok((source.match(/if\(!routeInsideKrai\(route\)\)/g) || []).length >= 2,
+    'both ORS and fallback route responses must be checked');
+  assert.match(source, /if\(!routeInsideKrai\(chosen\)\)throw Error\(/);
+  assert.match(source, /if\(routeInsideKrai\(r\)&&!candidates\.some/);
+});
+
+test('camera and map bounds remain constrained to the region', () => {
+  assert.match(source, /function safeSetView\(latlng,zoom\)\{const ll=L\.latLng\(latlng\);if\(!inKrasnodarKrai\(ll\.lat,ll\.lng\)\)return/);
+  assert.match(source, /maxBounds:kraiBounds,maxBoundsViscosity:1/);
+  assert.match(source, /map\.setMaxBounds\(b\)/);
+  assert.match(source, /map\.on\('moveend',clampMapCamera\)/);
+});
+
+test('GPS ignores stale and inaccurate fixes and stops on a confirmed outside fix', () => {
+  assert.match(source, /navigator\.geolocation\.watchPosition\(onNavigationPosition/);
+  assert.match(source, /Date\.now\(\)-pos\.timestamp>20000/);
+  assert.match(source, /if\(acc>60\)/);
+  assert.match(source, /if\(acc<=35\)[\s\S]{0,180}stopNavigation\(\)/);
+  assert.match(source, /navigator\.geolocation\.clearWatch\(watchId\)/);
+});
+
+test('rerouting is protected by a navigation session token', () => {
+  assert.match(source, /navSession\+\+;navActive=true/);
+  assert.match(source, /const session=navSession/);
+  assert.match(source, /navActive&&navSession===session/);
+  assert.match(source, /navSession\+\+;navActive=false/);
+});
+
+test('quietness score is clearly described as an estimate, not decibels', () => {
+  assert.match(source, /оценка по карте, не дБ/);
+});
