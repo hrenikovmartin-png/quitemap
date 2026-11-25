@@ -1,0 +1,33 @@
+name: QuietWalk browser smoke test
+
+on:
+  push:
+    branches:
+      - stage-2-map-guard
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout test branch
+        uses: actions/checkout@v4
+        with:
+          ref: stage-2-map-guard
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Chromium and Playwright
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+
+      - name: Run QuietWalk browser smoke test
+        run: node tests/browser-smoke.mjs
