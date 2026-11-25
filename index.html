@@ -90,7 +90,7 @@ html{scroll-behavior:smooth}body{-webkit-font-smoothing:antialiased;line-height:
  <header class="brand"><div class="brandmark"><div class="logo"></div><div><h1>QuietWalk <span style="color:var(--green)">MAX</span></h1><small>Маршруты, в которых легче дышать</small></div></div><button class="iconbtn" id="themeBtn" title="Сменить тему" aria-label="Сменить тему"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg></button></header>
  <div class="intro"><strong>Город можно пройти тише.</strong><p>Карта, поиск и маршруты ограничены Краснодарским краем. Укажите начало и конец прогулки — QuietWalk сравнит пешеходные варианты и постарается обойти отмеченные шумные места.</p></div>
  <section class="section"><div class="eyebrow">Найти место</div><div class="search"><input id="searchInput" placeholder="Адрес, улица или место…" autocomplete="off"><button class="btn primary" id="searchBtn">Найти</button></div><div class="suggestions" id="suggestions"></div><div class="actions"><button class="btn soft" id="favoritePlaceBtn">Добавить место в избранное</button><button class="btn warn" id="quickNoiseBtn">Добавить шумовую отметку</button></div><p class="hint">Поиск OpenStreetMap ограничен Краснодарским краем. Выберите результат, чтобы поставить точку на карте.</p></section>
- <section class="section"><div class="eyebrow">Ваш маршрут</div><div class="points"><div class="point"><b>Старт</b><span id="startLabel">Нажмите на карту</span></div><div class="point"><b>Финиш</b><span id="endLabel">Нажмите на карту</span></div></div><div class="actions"><button class="btn primary" id="quietBtn">Найти тихий путь</button><button class="btn soft" id="fastBtn">Прямой пеший</button><button class="btn plain" id="geoBtn">Моё местоположение</button><button class="btn plain" id="shareBtn">Поделиться</button><button class="btn primary wide" id="startNavBtn">Начать GPS-навигацию</button><button class="btn warn wide" id="stopNavBtn" disabled>Завершить навигацию</button><button class="btn plain wide" id="resetBtn">Сбросить маршрут</button></div>
+ <section class="section"><div class="eyebrow">Ваш маршрут</div><div class="points"><div class="point"><b>Старт</b><span id="startLabel">Нажмите на карту</span></div><div class="point"><b>Финиш</b><span id="endLabel">Нажмите на карту</span></div></div><div class="actions"><button class="btn primary" id="quietBtn">Найти тихий путь</button><button class="btn soft" id="fastBtn">Прямой пеший</button><button class="btn plain" id="geoBtn">Моё местоположение</button><button class="btn plain" id="shareBtn">Поделиться</button><button class="btn plain wide" id="importGpxBtn">Импортировать GPX</button><input id="gpxInput" type="file" accept=".gpx,application/gpx+xml,application/xml" hidden><button class="btn primary wide" id="startNavBtn">Начать GPS-навигацию</button><button class="btn warn wide" id="stopNavBtn" disabled>Завершить навигацию</button><button class="btn plain wide" id="resetBtn">Сбросить маршрут</button></div>
  <div class="navstatus" id="navStatus">GPS-навигация выключена</div><div class="routecard" id="routeCard"><h3 id="routeTitle">Маршрут готов</h3><p id="routeDesc"></p><div class="stats"><div class="stat"><b id="distance">—</b><small>расстояние</small></div><div class="stat"><b id="duration">—</b><small>в пути</small></div><div class="stat"><b id="detour">—</b><small>обход</small></div></div><div class="actions" style="margin-top:12px"><button class="btn soft" id="downloadGpxBtn">Скачать GPX</button><button class="btn plain" id="downloadGeoBtn">Скачать GeoJSON</button></div></div>
  </section>
  <section class="section"><div class="eyebrow">Настроить тишину</div><div class="range-row"><span>Чувствительность к шумовым отметкам</span><output id="sensitivityValue">Средняя</output></div><input type="range" min="1" max="3" value="2" id="sensitivity"><p class="hint">Модель учитывает класс дорог, железные дороги, промышленные и коммерческие зоны, стадионы и шумные заведения с весом по типу источника. Это расчётная оценка по OpenStreetMap, не измерение децибел.</p><div class="actions"><button class="btn warn" id="reportBtn">＋ Отметить шум на карте</button><button class="btn plain" id="autoNoiseBtn"> Найти шумовые зоны автоматически</button><button class="btn plain" id="clearReportsBtn">Очистить мои отметки</button></div></section>
@@ -203,7 +203,7 @@ function bind(){
   key('searchInput','keydown',e=>{if(e.key==='Enter')searchAddress()});
   click('geoBtn',locate);click('locateMapBtn',locate);
   click('quietBtn',()=>buildRoute(true));click('fastBtn',()=>buildRoute(false));
-  click('resetBtn',resetRoute);click('startNavBtn',startNavigation);click('stopNavBtn',stopNavigation);click('shareBtn',shareRoute);
+  click('resetBtn',resetRoute);click('importGpxBtn',()=> $('gpxInput')?.click());key('gpxInput','change',()=>importGpx($('gpxInput')?.files?.[0]));click('startNavBtn',startNavigation);click('stopNavBtn',stopNavigation);click('shareBtn',shareRoute);
   click('reportBtn',()=>setReportMode(!reportMode));
   click('clearReportsBtn',clearReports);click('autoNoiseBtn',loadAutomaticNoise);click('diagBtn',runDiag);if($('orsKeyInput'))$('orsKeyInput').value='';if($('cartoKeyInput'))$('cartoKeyInput').value='';
   click('saveApiBtn',()=>{const v=($('orsKeyInput').value||'').trim();if(v.length<20){toast('Ключ ORS слишком короткий. Проверьте его в кабинете OpenRouteService');return}orsKey=v;store.set('orsKey',v);$('orsKeyInput').value='';qwApiStatus();toast('Ключ ORS сохранён на этом устройстве')});click('clearApiBtn',()=>{orsKey='';store.set('orsKey','');qwApiStatus();toast('Ключ ORS удалён')});
@@ -491,6 +491,42 @@ function stopNavigation(){
  setStatus('Навигация остановлена');
 }
 function resetRoute(){if(navActive)stopNavigation();points=[];pointMarkers.forEach(m=>map.removeLayer(m));pointMarkers=[];if(routeLayer)map.removeLayer(routeLayer);routeLayer=null;if(searchMarker){map.removeLayer(searchMarker);searchMarker=null}$('routeCard').style.display='none';lastRoute=null;updatePointLabels();setStatus('Карта готова к прогулке')}
+async function importGpx(file){
+ if(!file)return;
+ const input=$('gpxInput');
+ try{
+  if(file.size>5*1024*1024)throw Error('Файл GPX слишком большой (максимум 5 МБ)');
+  const doc=new DOMParser().parseFromString(await file.text(),'application/xml');
+  if(doc.getElementsByTagName('parsererror').length)throw Error('Файл GPX повреждён или содержит некорректный XML');
+  const segments=Array.from(doc.getElementsByTagNameNS('*','trkseg'));
+  const track=segments.length?Array.from(segments[0].getElementsByTagNameNS('*','trkpt')):[];
+  const route=Array.from(doc.getElementsByTagNameNS('*','rtept'));
+  const nodes=track.length?track:route;
+  if(nodes.length<2)throw Error('В GPX не найден маршрут минимум из двух точек');
+  if(nodes.length>15000)throw Error('В GPX слишком много точек (максимум 15 000)');
+  const coords=nodes.map(n=>[Number(n.getAttribute('lon')),Number(n.getAttribute('lat'))]);
+  if(!coords.every(([lon,lat])=>Number.isFinite(lon)&&Number.isFinite(lat)))throw Error('В GPX есть некорректные координаты');
+  if(!coords.every(([lon,lat])=>inKrasnodarKrai(lat,lon)))throw Error('Импорт отменён: все точки GPX должны находиться внутри Краснодарского края');
+  const imported={geometry:{type:'LineString',coordinates:coords}};
+  if(!routeInsideKrai(imported))throw Error('Импорт отменён: линия GPX пересекает границу или выходит за пределы Краснодарского края');
+  let distance=0;for(let i=1;i<coords.length;i++)distance+=haversine(coords[i-1],coords[i]);
+  if(!Number.isFinite(distance)||distance<=0)throw Error('Не удалось определить длину маршрута GPX');
+  resetRoute();setPoint(L.latLng(coords[0][1],coords[0][0]));setPoint(L.latLng(coords.at(-1)[1],coords.at(-1)[0]));
+  const duration=Math.round(distance/1.25);
+  lastRoute={quiet:false,coords,distance,duration,detour:0,steps:[]};
+  routeLayer=L.geoJSON({type:'Feature',geometry:imported.geometry,properties:{}},{style:{color:'#397bc7',weight:6,opacity:.9,lineCap:'round'}}).addTo(map);
+  map.fitBounds(routeLayer.getBounds().pad(0.08),{padding:[30,30],maxZoom:17});clampMapCamera();
+  $('routeCard').style.display='block';$('routeTitle').textContent='Импортированный GPX-маршрут';
+  $('routeDesc').textContent='Точки и весь трек проверены по контуру Краснодарского края. Время — ориентировочная оценка при скорости 4,5 км/ч.';
+  $('distance').textContent=(distance/1000).toFixed(2)+' км';
+  $('duration').textContent=(m=>m>=60?Math.floor(m/60)+' ч '+(m%60)+' мин':m+' мин')(Math.max(1,Math.round(duration/60)));
+  $('detour').textContent='—';
+  const historyEntry={id:Date.now(),start:{lat:coords[0][1],lng:coords[0][0]},end:{lat:coords.at(-1)[1],lng:coords.at(-1)[0]},quiet:false,distance,duration,detour:0,created:new Date().toISOString()};
+  routeHistory=[historyEntry,...routeHistory].slice(0,12);store.set('routeHistory',routeHistory);if(activeTab==='history')renderList();
+  setStatus('GPX-маршрут импортирован и проверен');toast('GPX загружен. Маршрут находится внутри Краснодарского края.');
+ }catch(error){toast(error.message||'Не удалось импортировать GPX');setStatus('Импорт GPX не выполнен')}
+ finally{if(input)input.value=''}
+}
 async function shareRoute(){if(points.length!==2){toast('Сначала выберите две точки');return}const u=new URL(location.href);u.searchParams.set('start',points[0].lat+','+points[0].lng);u.searchParams.set('end',points[1].lat+','+points[1].lng);u.searchParams.set('mode',lastRoute&&lastRoute.quiet===false?'fast':'quiet');try{await navigator.clipboard.writeText(u.toString());toast('Ссылка скопирована')}catch{prompt('Скопируйте ссылку:',u.toString())}}
 function readSharedRoute(){const p=new URLSearchParams(location.search),s=p.get('start'),e=p.get('end'),mode=p.get('mode');if(!s||!e)return;try{const pair=[s,e].map(v=>v.split(',').map(Number));if(!pair.every(([lat,lon])=>inKrasnodarKrai(lat,lon))){toast('Ссылка содержит точки за пределами Краснодарского края');return}[s,e].forEach(v=>{const [lat,lon]=v.split(',').map(Number);if(Number.isFinite(lat)&&Number.isFinite(lon))setPoint(L.latLng(lat,lon))});if(points.length===2){map.fitBounds(L.latLngBounds(points));setTimeout(()=>buildRoute(mode!=='fast'),500)}}catch{toast('Ссылка на маршрут повреждена')}}
 function drawReports(){reports.forEach((r,i)=>{if(r.id==null)r.id=Date.now()+i});reportLayers.forEach(l=>map.removeLayer(l));reportLayers=[];[...reports,...autoReports].forEach(r=>{const automatic=!!r.automatic;const l=L.circle([r.lat,r.lon],{radius:automatic?190:115,color:automatic?'#d98b25':'#d84f49',fillColor:automatic?'#f2b84b':'#e85d55',fillOpacity:.2,weight:2,bubblingMouseEvents:true}).addTo(map).bindPopup('<b>'+(automatic?'Предполагаемый источник шума':'Шумовая отметка')+'</b><br>'+escapeHtml(r.reason)+'<div class="popup-actions"><button onclick="window.qwNoise('+r.lat+','+r.lon+')">Добавить отметку в этой зоне</button>'+(automatic?'':'<button class=\"danger\" onclick=\"window.qwDeleteReport('+r.id+')\">Удалить отметку</button>')+'</div>');l.on('click',e=>{if(reportMode){L.DomEvent.stop(e);saveNoiseReportAt(e.latlng.lat,e.latlng.lng);setReportMode(false)}});reportLayers.push(l)})}
