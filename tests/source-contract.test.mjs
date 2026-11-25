@@ -25,8 +25,8 @@ test('every router response and final selected route is checked against the regi
   assert.match(source, /if\(routeInsideKrai\(r\)&&!candidates\.some/);
 });
 
+test('camera and map bounds remain constrained to the region', () => {
   assert.match(source, /function safeSetView\(latlng,zoom\)\{const ll=L\.latLng\(latlng\);if\(!inKrasnodarKrai\(ll\.lat,ll\.lng\)\)\{toast\(/);
-  assert.match(source, /function safeSetView\(latlng,zoom\)\{const ll=L\.latLng\(latlng\);if\(!inKrasnodarKrai\(ll\.lat,ll\.lng\)\)return/);
   assert.match(source, /maxBounds:kraiBounds,maxBoundsViscosity:1/);
   assert.match(source, /map\.setMaxBounds\(b\)/);
   assert.match(source, /map\.on\('moveend',clampMapCamera\)/);
