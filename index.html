@@ -210,7 +210,55 @@ async function getFootRoute(coords){
 function haversine(a,b){const R=6371000,toRad=x=>x*Math.PI/180,dLat=toRad(b[1]-a[1]),dLon=toRad(b[0]-a[0]),x=Math.sin(dLat/2)**2+Math.cos(toRad(a[1]))*Math.cos(toRad(b[1]))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
 function minDistanceToReports(coords){if(!reports.length)return 99999;let min=99999;for(let i=0;i<coords.length;i+=Math.max(1,Math.floor(coords.length/80))){for(const r of reports)min=Math.min(min,haversine(coords[i],[r.lon,r.lat]))}return min}
 function routeNoisePenalty(route){const coords=route.geometry.coordinates;const radius=Number($('sensitivity').value);let penalty=0;for(const r of [...reports,...autoReports]){const d=minDistanceToReportsForOne(coords,r);const threshold=radius===1?90:radius===2?170:280;if(d<threshold){const weight=r.weight||1;penalty+=(threshold-d)*weight}}return penalty}
-async function loadAutomaticNoise(){if(points.length!==2){toast('Сначала выберите начало и конец маршрута');return}const a=points[0],b=points[1],south=Math.max(KRAI_BOUNDS.south,Math.min(a.lat,b.lat)-0.035),north=Math.min(KRAI_BOUNDS.north,Math.max(a.lat,b.lat)+0.035),west=Math.max(KRAI_BOUNDS.west,Math.min(a.lng,b.lng)-0.045),east=Math.min(KRAI_BOUNDS.east,Math.max(a.lng,b.lng)+0.045);const bbox=[south,west,north,east].join(',');const q='[out:json][timeout:25];(way[highway~"motorway|trunk|primary|secondary|tertiary"]('+bbox+');way[railway~"rail|tram"]('+bbox+');way[landuse=industrial]('+bbox+');way[landuse=commercial]('+bbox+');way[leisure=stadium]('+bbox+');node[amenity~"fuel|nightclub|bar"]('+bbox+'););out center tags 250;';$('autoNoiseBtn').disabled=true;setStatus('Загружаем шумовые зоны из OpenStreetMap…');try{let response;for(const host of ['https://maps.mail.ru/osm/tools/overpass/api/interpreter','https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter']){try{response=await fetch(host+'?data='+encodeURIComponent(q),{signal:AbortSignal.timeout(15000)});if(response.ok)break}catch(e){}}if(!response||!response.ok)throw Error('Сервис шумовых данных временно недоступен');const data=await response.json();autoReports=data.elements.map(el=>{const lat=el.lat??el.center?.lat,lon=el.lon??el.center?.lon,t=el.tags||{};let reason='Дорога',weight=0.7;if(t.railway)reason='Железная дорога',weight=2.1;else if(t.landuse==='industrial')reason='Промышленная зона',weight=2.0;else if(t.landuse==='commercial')reason='Коммерческая зона',weight=0.8;else if(t.leisure==='stadium')reason='Стадион',weight=1.5;else if(t.amenity==='fuel')reason='Автозаправка',weight=1.1;else if(t.amenity==='nightclub'||t.amenity==='bar')reason='Ночное заведение',weight=1.3;if(t.highway==='motorway'||t.highway==='trunk')weight=2.0;else if(t.highway==='primary')weight=1.6;else if(t.highway==='secondary')weight=1.25;else if(t.highway==='tertiary')weight=0.9;return {lat,lon,reason,weight,highway:t.highway||null,automatic:true}}).filter(x=>Number.isFinite(x.lat)&&Number.isFinite(x.lon)&&inKrasnodarKrai(x.lat,x.lon));drawReports();setStatus('Автоматически найдено шумовых объектов: '+autoReports.length);toast('Найдено потенциальных источников шума: '+autoReports.length+'. Это модель по типу объектов и дорог, не показания в дБ. Теперь нажмите «Найти тихий путь».')}catch(e){toast('Не удалось загрузить шумовые зоны: '+e.message)}finally{$('autoNoiseBtn').disabled=false}}
+async function loadAutomaticNoise(){
+ if(points.length!==2){toast('Сначала выберите начало и конец маршрута');return}
+ const a=points[0],b=points[1];
+ const south=Math.max(KRAI_BOUNDS.south,Math.min(a.lat,b.lat)-0.035),north=Math.min(KRAI_BOUNDS.north,Math.max(a.lat,b.lat)+0.035);
+ const west=Math.max(KRAI_BOUNDS.west,Math.min(a.lng,b.lng)-0.045),east=Math.min(KRAI_BOUNDS.east,Math.max(a.lng,b.lng)+0.045);
+ if(!(south<north&&west<east)){toast('Не удалось определить область поиска шумовых данных');return}
+ const bbox=[south,west,north,east].join(',');
+ const q='[out:json][timeout:18][maxsize:67108864];(way[highway~"^(motorway|trunk|primary|secondary|tertiary|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"]('+bbox+');way[railway~"^(rail|tram|light_rail|subway)$"]('+bbox+');way[landuse~"^(industrial|commercial)$"]('+bbox+');way[leisure=stadium]('+bbox+');node[amenity~"^(fuel|nightclub|bar)$"]('+bbox+'););out center tags;';
+ const button=$('autoNoiseBtn');if(button)button.disabled=true;
+ setStatus('Загружаем шумовые зоны из OpenStreetMap…');
+ const hosts=['https://maps.mail.ru/osm/tools/overpass/api/interpreter','https://overpass.private.coffee/api/interpreter','https://ovp.dresel.systems/api/interpreter','https://overpass-api.de/api/interpreter'];
+ let data=null,lastError='Сервисы Overpass не ответили';
+ try{
+  for(const host of hosts){
+   try{
+    const response=await fetch(host,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','Accept':'application/json'},body:new URLSearchParams({data:q}).toString(),signal:AbortSignal.timeout(20000),cache:'no-store'});
+    if(!response.ok){lastError='HTTP '+response.status+' от '+new URL(host).hostname;continue}
+    const parsed=await response.json();
+    if(!parsed||!Array.isArray(parsed.elements)){lastError='Сервис вернул неожиданный формат данных';continue}
+    data=parsed;break;
+   }catch(e){lastError=(e&&e.name==='TimeoutError')?'Истекло время ожидания Overpass':(e&&e.message)||'Ошибка сети'}
+  }
+  if(!data)throw Error(lastError);
+  const next=data.elements.map(el=>{
+   const lat=el.lat??el.center?.lat,lon=el.lon??el.center?.lon,t=el.tags||{};
+   let reason='Дорога',weight=0.7;
+   if(t.railway){reason='Железная дорога';weight=2.1}
+   else if(t.landuse==='industrial'){reason='Промышленная зона';weight=2.0}
+   else if(t.landuse==='commercial'){reason='Коммерческая зона';weight=0.8}
+   else if(t.leisure==='stadium'){reason='Стадион';weight=1.5}
+   else if(t.amenity==='fuel'){reason='Автозаправка';weight=1.1}
+   else if(t.amenity==='nightclub'||t.amenity==='bar'){reason='Ночное заведение';weight=1.3}
+   if(t.highway==='motorway'||t.highway==='trunk')weight=2.0;
+   else if(t.highway==='primary'||t.highway==='primary_link')weight=1.6;
+   else if(t.highway==='secondary'||t.highway==='secondary_link')weight=1.25;
+   else if(t.highway==='tertiary'||t.highway==='tertiary_link')weight=0.9;
+   return {lat,lon,reason,weight,highway:t.highway||null,automatic:true,osmType:el.type,osmId:el.id};
+  }).filter(x=>Number.isFinite(x.lat)&&Number.isFinite(x.lon)&&inKrasnodarKrai(x.lat,x.lon));
+  const unique=new Map();for(const item of next)unique.set(item.osmType+':'+item.osmId,item);
+  const result=[...unique.values()];
+  if(!result.length)throw Error('OpenStreetMap не вернул шумовых объектов в выбранной области');
+  autoReports=result;drawReports();
+  setStatus('Автоматически найдено потенциальных источников шума: '+autoReports.length);
+  toast('Найдено объектов: '+autoReports.length+'. Источник: OpenStreetMap. Это оценка по типам объектов и дорог, не измерение децибел. Теперь постройте тихий маршрут.');
+ }catch(e){
+  toast('Автоданные не загрузились: '+(e.message||'ошибка сети')+'. Ручные отметки сохранены; попробуйте ещё раз позже.');
+  setStatus('Автоданные временно недоступны — ручные отметки продолжают работать');
+ }finally{if(button)button.disabled=false}
+}
 function minDistanceToReportsForOne(coords,r){let min=99999;for(let i=0;i<coords.length;i+=Math.max(1,Math.floor(coords.length/100)))min=Math.min(min,haversine(coords[i],[r.lon,r.lat]));return min}
 
 function qwScore(coords){const rs=[...reports,...autoReports];let el=document.getElementById('qwScore');if(!el){el=document.createElement('div');el.id='qwScore';$('routeDesc').after(el)}
