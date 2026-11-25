@@ -5,6 +5,7 @@
 <meta name="theme-color" content="#120a1f"><meta name="description" content="QuietWalk — конструктор пешеходных маршрутов с упором на спокойные улицы и зелёные места.">
 <meta property="og:type" content="website"><meta property="og:title" content="QuietWalk MAX — тихие маршруты"><meta property="og:description" content="Пешеходные маршруты по спокойным улицам и зелёным местам Краснодарского края."><meta property="og:url" content="https://hrenikovmartin-png.github.io/quitemap/"><meta name="twitter:card" content="summary"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Crect width=%22100%22 height=%22100%22 rx=%2224%22 fill=%22%23c2185b%22/%3E%3Ctext x=%2250%22 y=%2268%22 font-size=%2260%22 text-anchor=%22middle%22 fill=%22white%22 font-family=%22Arial%22%3EQ%3C/text%3E%3C/svg%3E">
 <title>QuietWalk MAX — тихие маршруты</title>
+<link rel="manifest" href="./manifest.webmanifest"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="QuietWalk">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="preconnect" href="https://unpkg.com"><link rel="preconnect" href="https://cdnjs.cloudflare.com"><link rel="preconnect" href="https://tile.openstreetmap.org">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" onerror="this.onerror=null;this.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css'">
 <style>
@@ -564,4 +565,16 @@ try{init()}catch(error){
   const mapEl=$('map');if(mapEl)mapEl.insertAdjacentHTML('beforeend','<div style="position:absolute;z-index:2000;top:70px;left:16px;right:16px;padding:12px;background:#fff0ed;color:#8b302b;border-radius:12px;font:13px system-ui">Не удалось запустить QuietWalk. Подробности: '+escapeHtml(error.message)+'</div>');
 }
 })();
+if ('serviceWorker' in navigator && window.isSecureContext) {
+ navigator.serviceWorker.register(new URL('sw.js', document.baseURI)).catch(error => console.warn('QuietWalk offline shell is unavailable:', error));
+}
+const qwNetworkStatus=document.getElementById('qwNetworkStatus');
+function qwUpdateNetworkStatus(){
+ if(!qwNetworkStatus)return;
+ qwNetworkStatus.textContent=navigator.onLine?'Онлайн':'Офлайн · маршруты требуют интернет';
+ qwNetworkStatus.title=navigator.onLine?'Сетевые сервисы доступны':'Сохранён интерфейс и контур края; построение маршрутов и тайлы требуют интернет';
+}
+window.addEventListener('online',qwUpdateNetworkStatus);
+window.addEventListener('offline',qwUpdateNetworkStatus);
+qwUpdateNetworkStatus();
 </script></body></html>
