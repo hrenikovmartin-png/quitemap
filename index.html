@@ -95,7 +95,7 @@ html{scroll-behavior:smooth}body{-webkit-font-smoothing:antialiased;line-height:
  </section>
  <section class="section"><div class="eyebrow">Настроить тишину</div><div class="range-row"><span>Чувствительность к шумовым отметкам</span><output id="sensitivityValue">Средняя</output></div><input type="range" min="1" max="3" value="2" id="sensitivity"><p class="hint">Модель учитывает класс дорог, железные дороги, промышленные и коммерческие зоны, стадионы и шумные заведения с весом по типу источника. Это расчётная оценка по OpenStreetMap, не измерение децибел.</p><div class="actions"><button class="btn warn" id="reportBtn">＋ Отметить шум на карте</button><button class="btn plain" id="autoNoiseBtn"> Найти шумовые зоны автоматически</button><button class="btn plain" id="clearReportsBtn">Очистить мои отметки</button></div></section>
  <section class="section"><div class="eyebrow">Ключи сервисов карты и маршрутов</div><div class="api-controls"><label class="hint" for="orsKeyInput">OpenRouteService — ключ для пеших маршрутов</label><input class="field" id="orsKeyInput" type="password" autocomplete="off" placeholder="Вставьте ключ ORS"><div class="actions"><button class="btn soft" id="saveApiBtn">Сохранить ORS</button><button class="btn plain" id="clearApiBtn">Удалить ORS</button></div><label class="hint" for="cartoKeyInput">CARTO Basemaps — ключ оформления карты</label><input class="field" id="cartoKeyInput" type="password" autocomplete="off" placeholder="Вставьте ключ CARTO Basemaps"><div class="actions"><button class="btn soft" id="saveCartoKeyBtn">Сохранить CARTO</button><button class="btn plain" id="clearCartoKeyBtn">Удалить CARTO</button></div><p class="hint" id="apiStatus">Ключи хранятся только в локальном хранилище этого браузера.</p><button class="btn plain wide" id="diagBtn">Проверить сервисы</button><div class="hint" id="diagOut" aria-live="polite"></div></div><p class="hint">Не публикуйте ключи в открытом доступе. После сохранения поля очищаются. На другом устройстве ключи нужно добавить отдельно.</p></section>
- <div class="tabs"><button class="tab active" data-tab="places">Места</button><button class="tab" data-tab="favorites">Избранное</button><button class="tab" data-tab="reports">Шумовые отметки</button></div><div class="list" id="listArea"><div class="empty">Загрузка карты мест…</div></div>
+ <div class="tabs"><button class="tab active" data-tab="places">Места</button><button class="tab" data-tab="favorites">Избранное</button><button class="tab" data-tab="reports">Шумовые отметки</button><button class="tab" data-tab="history">История</button></div><div class="list" id="listArea"><div class="empty">Загрузка карты мест…</div></div>
  <footer class="foot">Данные карты © OpenStreetMap contributors. Контур края: geoBoundaries (ODbL 1.0). QuietWalk MAX · сборка 25.11.2026. Независимый проект. Маршруты и оценки носят ориентировочный характер; проверяйте дорожные условия на месте.</footer>
 </aside>
 <main class="mapwrap"><div id="map"></div><div class="maptop"><div class="mapbadge">QuietWalk · <span id="mapStatus" role="status" aria-live="polite">Карта готова к прогулке</span></div><div class="maptools"><button id="showPlacesBtn">Места рядом</button><button id="locateMapBtn">◎</button></div></div><div class="legend"><div><span class="dot" style="background:#e0457f"></span>Тихий маршрут (эвристика)</div><div><span class="dot" style="background:#e0524d"></span>Отмеченный шум</div><div><span class="dot" style="background:#397bc7"></span>Пеший маршрут</div></div><div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div></main>
@@ -114,7 +114,7 @@ if(!window.L){
   return;
 }
 const $=id=>document.getElementById(id);const store={get(k,d){try{return JSON.parse(localStorage.getItem('qwmax_'+k))??d}catch{return d}},set(k,v){try{localStorage.setItem('qwmax_'+k,JSON.stringify(v))}catch{}}};
-let map,lightLayer,darkLayer,kraiMaskLayer=null,points=[],pointMarkers=[],routeLayer=null,placeLayer=null,reportLayers=[],autoReports=[],places=[],favorites=store.get('favorites',[]),customFavorites=store.get('customFavorites',[]),reports=store.get('reports',[]),reportMode=false,activeTab='places',lastRoute=null,searchMarker=null,toastTimer,watchId=null,gpsMarker=null,navActive=false,lastNavVoice=0,kraiGeometry=null,kraiGeometries=[],lastGpsFix=null,lastNearestIndex=0,offRouteCount=0,rerouting=false,lastTurnIndex=-1,navSession=0,kraiBoundarySegments=[];
+let map,lightLayer,darkLayer,kraiMaskLayer=null,points=[],pointMarkers=[],routeLayer=null,placeLayer=null,reportLayers=[],autoReports=[],places=[],favorites=store.get('favorites',[]),customFavorites=store.get('customFavorites',[]),reports=store.get('reports',[]),routeHistory=store.get('routeHistory',[]),reportMode=false,activeTab='places',lastRoute=null,searchMarker=null,toastTimer,watchId=null,gpsMarker=null,navActive=false,lastNavVoice=0,kraiGeometry=null,kraiGeometries=[],lastGpsFix=null,lastNearestIndex=0,offRouteCount=0,rerouting=false,lastTurnIndex=-1,navSession=0,kraiBoundarySegments=[];
 let orsKey=store.get('orsKey',''),cartoKey=store.get('cartoKey','');
 const sensitivityNames={1:'Мягкая',2:'Средняя',3:'Строгая'};
 // Работа с точками и маршрутами разрешается только после загрузки точного контура Краснодарского края.
@@ -396,6 +396,9 @@ async function buildRoute(quiet,guard=null){
   map.fitBounds(routeLayer.getBounds().pad(0.08),{padding:[30,30],maxZoom:17});clampMapCamera();
   const km=chosen.distance/1000,min=chosen.duration/60;
   lastRoute={quiet,coords:chosen.geometry.coordinates,distance:chosen.distance,duration:chosen.duration,detour,steps:chosen.steps||[]};
+  const historyEntry={id:Date.now(),start:{lat:a.lat,lng:a.lng},end:{lat:b.lat,lng:b.lng},quiet:!!quiet,distance:chosen.distance,duration:chosen.duration,detour,created:new Date().toISOString()};
+  routeHistory=[historyEntry,...routeHistory.filter(item=>!(item.quiet===historyEntry.quiet&&Math.abs(item.start.lat-historyEntry.start.lat)<0.00001&&Math.abs(item.start.lng-historyEntry.start.lng)<0.00001&&Math.abs(item.end.lat-historyEntry.end.lat)<0.00001&&Math.abs(item.end.lng-historyEntry.end.lng)<0.00001))].slice(0,12);
+  store.set('routeHistory',routeHistory);if(activeTab==='history')renderList();
   $('routeCard').style.display='block';
   $('routeTitle').textContent=quiet?'Альтернативный маршрут':'Кратчайший пеший маршрут';
   $('routeDesc').textContent=quiet?((reports.length||autoReports.length)?'Подобран вариант с учётом '+(autoReports.length?'автоматически найденных объектов OpenStreetMap':'ваших шумовых отметок')+'. Это оценка по карте объектов, не измерение децибел.':(detour>1?'Подобран обходной вариант. Без шумовых данных это эвристика, а не гарантия тишины.':'Заметно тише обход без большого крюка не нашёлся, маршрут совпадает с кратчайшим. Добавьте шумовые отметки или найдите шумовые зоны автоматически.')):(orsKey?'Кратчайший пеший вариант через OpenRouteService.':'Кратчайший доступный пеший вариант через резервный маршрутизатор.');
@@ -516,7 +519,46 @@ function addPlaceMarker(p,layer){L.marker([p.lat,p.lon]).addTo(layer||map).bindP
 window.qwFavorite=id=>{const p=places.find(x=>String(x.id)===String(id));if(!p)return;const exists=favorites.some(f=>String(typeof f==='object'?f.id:f)===String(id));favorites=exists?favorites.filter(f=>String(typeof f==='object'?f.id:f)!==String(id)):[...favorites,{id:p.id,name:p.name,lat:p.lat,lon:p.lon,type:p.type}];store.set('favorites',favorites);renderList();toast(exists?'Удалено из избранного':'Добавлено в избранное')};
 async function loadPlaces(){// Загружаем реальные объекты OSM вокруг центра карты. Отсутствие ответа не ломает приложение.
 try{const c=map.getCenter(),q='[out:json][timeout:15];(node[leisure~"park|garden|nature_reserve"](around:5500,'+c.lat+','+c.lng+');way[leisure~"park|garden|nature_reserve"](around:5500,'+c.lat+','+c.lng+'););out center tags;';let r=null;for(const h of ['https://maps.mail.ru/osm/tools/overpass/api/interpreter','https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter']){try{const x=await fetch(h+'?data='+encodeURIComponent(q),{signal:AbortSignal.timeout(15000)});if(x.ok){r=x;break}}catch(e){}}if(!r)throw Error('OSM unavailable');const d=await r.json();places=(Array.isArray(d.elements)?d.elements:[]).map((x,i)=>({id:x.id,lat:x.lat??x.center?.lat,lon:x.lon??x.center?.lon,name:x.tags?.name||x.tags?.leisure||'Зелёная зона',type:x.tags?.leisure||'зелёная зона'})).filter(x=>Number.isFinite(x.lat)&&Number.isFinite(x.lon)&&inKrasnodarKrai(x.lat,x.lon)).slice(0,35);renderList();setStatus(places.length?'Найдено зелёных мест: '+places.length:'Карта готова к прогулке')}catch(e){places=[];renderList();$('listArea').innerHTML='<div class="empty">Не удалось загрузить зелёные места из OpenStreetMap. Карта, поиск и построение маршрута продолжают работать.</div>'}}
-function renderList(){const area=$('listArea');let rows=[];if(activeTab==='places')rows=places.slice(0,30).map(p=>({title:p.name,sub:p.type,lat:p.lat,lon:p.lon}));if(activeTab==='favorites'){rows=favorites.map(f=>typeof f==='object'?f:places.find(p=>String(p.id)===String(f))).filter(Boolean).map(p=>({title:p.name,sub:'Избранное · OpenStreetMap',lat:p.lat,lon:p.lon??p.lng}));rows=rows.concat(customFavorites.map(p=>({title:p.name,sub:'Избранное · сохранённое место',lat:p.lat,lon:p.lon})));}if(activeTab==='reports')rows=reports.map(r=>({rid:r.id,title:r.reason,sub:new Date(r.created).toLocaleDateString(),lat:r.lat,lon:r.lon}));area.innerHTML='';if(!rows.length){area.innerHTML='<div class="empty">'+(activeTab==='places'?'Зелёные места появятся после загрузки данных OpenStreetMap.':'Пока здесь пусто.')+'</div>';return}rows.forEach(row=>{const el=document.createElement('div');el.className='item';const meta=document.createElement('div');meta.className='meta';const b=document.createElement('b');b.textContent=row.title;const sm=document.createElement('small');sm.textContent=row.sub;meta.append(b,sm);const btn=document.createElement('button');btn.className='mini';btn.textContent='Показать';btn.onclick=()=>safeSetView([row.lat,row.lon],17);el.append(meta,btn);if(row.rid!=null){const del=document.createElement('button');del.className='mini danger';del.textContent='Удалить';del.onclick=()=>window.qwDeleteReport(row.rid);el.append(del)}area.append(el)})}
+function restoreHistoryRoute(id){
+ const item=routeHistory.find(entry=>String(entry.id)===String(id));
+ if(!item||!inKrasnodarKrai(item.start?.lat,item.start?.lng)||!inKrasnodarKrai(item.end?.lat,item.end?.lng)){
+  toast('Сохранённый маршрут не прошёл проверку границ Краснодарского края');return;
+ }
+ resetRoute();
+ const start=L.latLng(item.start.lat,item.start.lng),end=L.latLng(item.end.lat,item.end.lng);
+ setPoint(start);setPoint(end);safeSetView(start,15);
+ buildRoute(!!item.quiet);
+}
+function removeHistoryRoute(id){
+ routeHistory=routeHistory.filter(entry=>String(entry.id)!==String(id));
+ store.set('routeHistory',routeHistory);renderList();toast('Маршрут удалён из истории');
+}
+function renderList(){
+ const area=$('listArea');let rows=[];
+ if(activeTab==='places')rows=places.slice(0,30).map(p=>({title:p.name,sub:p.type,lat:p.lat,lon:p.lon}));
+ if(activeTab==='favorites'){
+  rows=favorites.map(f=>typeof f==='object'?f:places.find(p=>String(p.id)===String(f))).filter(Boolean).map(p=>({title:p.name,sub:'Избранное · OpenStreetMap',lat:p.lat,lon:p.lon??p.lng}));
+  rows=rows.concat(customFavorites.map(p=>({title:p.name,sub:'Избранное · сохранённое место',lat:p.lat,lon:p.lon})));
+ }
+ if(activeTab==='reports')rows=reports.map(r=>({rid:r.id,title:r.reason,sub:new Date(r.created).toLocaleDateString(),lat:r.lat,lon:r.lon}));
+ if(activeTab==='history')rows=routeHistory.map(r=>({historyId:r.id,repeat:true,title:r.quiet?'Тихий маршрут':'Пеший маршрут',sub:new Date(r.created).toLocaleString('ru-RU',{dateStyle:'short',timeStyle:'short'})+' · '+(Number(r.distance)/1000).toFixed(2)+' км',lat:r.start.lat,lon:r.start.lng}));
+ area.innerHTML='';
+ if(!rows.length){
+  area.innerHTML='<div class="empty">'+(activeTab==='places'?'Зелёные места появятся после загрузки данных OpenStreetMap.':activeTab==='history'?'Построенные маршруты будут сохраняться здесь на этом устройстве.':'Пока здесь пусто.')+'</div>';return;
+ }
+ rows.forEach(row=>{
+  const el=document.createElement('div');el.className='item';
+  const meta=document.createElement('div');meta.className='meta';
+  const b=document.createElement('b');b.textContent=row.title;
+  const sm=document.createElement('small');sm.textContent=row.sub;meta.append(b,sm);
+  const btn=document.createElement('button');btn.className='mini';btn.textContent=row.repeat?'Повторить':'Показать';
+  btn.onclick=()=>row.repeat?restoreHistoryRoute(row.historyId):safeSetView([row.lat,row.lon],17);
+  el.append(meta,btn);
+  if(row.rid!=null){const del=document.createElement('button');del.className='mini danger';del.textContent='Удалить';del.onclick=()=>window.qwDeleteReport(row.rid);el.append(del)}
+  if(row.historyId!=null){const del=document.createElement('button');del.className='mini danger';del.textContent='Удалить';del.onclick=()=>removeHistoryRoute(row.historyId);el.append(del)}
+  area.append(el);
+ });
+}
 
 let voiceEnabled=false;
 function enableVoice(){
