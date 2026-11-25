@@ -10,7 +10,7 @@
   "theme_color": "#0d0814",
   "icons": [
     {
-      "src": "./icons/quietwalk.svg",
+      "src": "./quietwalk.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
