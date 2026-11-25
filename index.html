@@ -255,7 +255,7 @@ async function loadAutomaticNoise(){
  const west=Math.max(KRAI_BOUNDS.west,Math.min(a.lng,b.lng)-0.045),east=Math.min(KRAI_BOUNDS.east,Math.max(a.lng,b.lng)+0.045);
  if(!(south<north&&west<east)){toast('Не удалось определить область поиска шумовых данных');return}
  const bbox=[south,west,north,east].join(',');
- const q='[out:json][timeout:18][maxsize:67108864];(way[highway~"^(motorway|trunk|primary|secondary|tertiary|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"]('+bbox+');way[railway~"^(rail|tram|light_rail|subway)$"]('+bbox+');way[landuse~"^(industrial|commercial)$"]('+bbox+');way[leisure=stadium]('+bbox+');node[amenity~"^(fuel|nightclub|bar)$"]('+bbox+'););out geom tags;
+ const q='[out:json][timeout:18][maxsize:67108864];(way[highway~"^(motorway|trunk|primary|secondary|tertiary|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"]('+bbox+');way[railway~"^(rail|tram|light_rail|subway)$"]('+bbox+');way[landuse~"^(industrial|commercial)$"]('+bbox+');way[leisure=stadium]('+bbox+');node[amenity~"^(fuel|nightclub|bar)$"]('+bbox+'););out geom tags;';
  const button=$('autoNoiseBtn');if(button)button.disabled=true;
  setStatus('Загружаем шумовые зоны из OpenStreetMap…');
  const hosts=['https://ovp.dresel.systems/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter','https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter'];
@@ -310,6 +310,8 @@ function minDistanceToReportsForOne(coords,r){
  let min=Infinity;
  if(Array.isArray(r.geometry)&&r.geometry.length>1){
   const source=r.geometry.map(xy);
+  if(coords.length===1){const p=xy(coords[0]);for(let j=1;j<source.length;j++){min=Math.min(min,pointSeg(p,source[j-1],source[j]));if(min===0)return 0}return min}
+  if(r.geometry.length>=4&&Math.abs(r.geometry[0][0]-r.geometry[r.geometry.length-1][0])<1e-8&&Math.abs(r.geometry[0][1]-r.geometry[r.geometry.length-1][1])<1e-8&&coords.some(c=>pointInRing(c[0],c[1],r.geometry)))return 0;
   for(let i=1;i<coords.length;i++){const a=xy(coords[i-1]),b=xy(coords[i]);for(let j=1;j<source.length;j++){const c=source[j-1],d=source[j];if(Math.max(a[0],b[0])+min<Math.min(c[0],d[0])||Math.max(c[0],d[0])+min<Math.min(a[0],b[0])||Math.max(a[1],b[1])+min<Math.min(c[1],d[1])||Math.max(c[1],d[1])+min<Math.min(a[1],b[1]))continue;if(intersects(a,b,c,d))return 0;min=Math.min(min,pointSeg(a,c,d),pointSeg(b,c,d),pointSeg(c,a,b),pointSeg(d,a,b));if(min===0)return 0}}
   return min;
  }
@@ -320,7 +322,7 @@ function minDistanceToReportsForOne(coords,r){
 function qwScore(coords){const rs=[...reports,...autoReports];let el=document.getElementById('qwScore');if(!el){el=document.createElement('div');el.id='qwScore';$('routeDesc').after(el)}
 if(!rs.length){el.innerHTML='<div class="qs-t">Индекс тишины: нет данных. Нажмите «Найти шумовые зоны автоматически».</div>';return}
 const step=Math.max(1,Math.floor(coords.length/150));let tot=0,n=0;
-for(let i=0;i<coords.length;i+=step){let e=0;for(const r of rs){const rad=r.automatic?190:115,d=haversine(coords[i],[r.lon,r.lat]);if(d<rad)e+=(r.weight||1.3)*(1-d/rad)}tot+=e;n++}
+for(let i=0;i<coords.length;i+=step){let e=0;for(const r of rs){const rad=r.automatic?190:115,d=minDistanceToReportsForOne([coords[i]],r);if(d<rad)e+=(r.weight||1.3)*(1-d/rad)}tot+=e;n++}
 const idx=Math.round(100*Math.exp(-1.2*tot/n));
 el.innerHTML='<div class="qs-t">Индекс тишины <b>'+idx+'</b>/100 <span>оценка по карте, не дБ</span></div><div class="qs-bar"><i style="width:'+idx+'%"></i></div>'}
 async function buildRoute(quiet,guard=null){
