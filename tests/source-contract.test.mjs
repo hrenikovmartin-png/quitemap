@@ -67,3 +67,11 @@ test('recent routes are persisted locally and replay is boundary-checked', () =>
   assert.match(source, /inKrasnodarKrai\(item\.end\?\.lat,item\.end\?\.lng\)/);
   assert.match(source, /slice\(0,12\)/);
 });
+
+test('GPX import is size-limited and rejects any route outside the regional boundary', () => {
+  assert.match(source, /function importGpx\(file\)/);
+  assert.match(source, /file\.size>5\*1024\*1024/);
+  assert.match(source, /nodes\.length>15000/);
+  assert.match(source, /coords\.every\(\(\[lon,lat\]\)=>inKrasnodarKrai\(lat,lon\)\)/);
+  assert.match(source, /if\(!routeInsideKrai\(imported\)\)/);
+});
