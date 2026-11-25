@@ -50,3 +50,11 @@ test('rerouting is protected by a navigation session token', () => {
 test('quietness score is clearly described as an estimate, not decibels', () => {
   assert.match(source, /оценка по карте, не дБ/);
 });
+
+test('GPS permission denial and synchronous browser errors cleanly stop navigation', () => {
+  assert.match(source, /const handleGpsError=err=>/);
+  assert.match(source, /if\(err\.code===1\)\{\s*stopNavigation\(\)/);
+  assert.match(source, /watchId=navigator\.geolocation\.watchPosition/);
+  assert.match(source, /catch\(error\)\{\s*const msg='Не удалось запустить GPS:/);
+  assert.match(source, /stopNavigation\(\);\s*\$\('navStatus'\)\.textContent=msg/);
+});
