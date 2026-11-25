@@ -85,6 +85,28 @@ try {
   if (!result.status.includes('Точный контур Краснодарского края загружен')) {
     throw new Error('The application did not accept the Krasnodar Krai boundary: ' + result.status);
   }
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 45000 });
+  await page.waitForFunction(() => !!navigator.serviceWorker?.controller, { timeout: 20000 });
+  await page.context().setOffline(true);
+  try {
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.waitForFunction(() => {
+      const status = document.getElementById('mapStatus')?.textContent || '';
+      return status.includes('Точный контур Краснодарского края загружен');
+    }, { timeout: 45000 });
+    const offlineResult = await page.evaluate(() => ({
+      leafletLoaded: !!window.L,
+      mapCreated: !!document.querySelector('#map.leaflet-container'),
+      boundaryLoaded: (document.getElementById('mapStatus')?.textContent || '').includes('Точный контур Краснодарского края загружен')
+    }));
+    if (!offlineResult.leafletLoaded || !offlineResult.mapCreated || !offlineResult.boundaryLoaded) {
+      throw new Error('Offline shell did not reopen correctly: ' + JSON.stringify(offlineResult));
+    }
+    console.log('QUIETWALK_OFFLINE_RESULT=' + JSON.stringify(offlineResult));
+  } finally {
+    await page.context().setOffline(false);
+  }
+
   if (errors.length) throw new Error('Uncaught browser errors: ' + errors.join(' | '));
 
   console.log('QUIETWALK_BROWSER_SMOKE_RESULT=' + JSON.stringify(result));
