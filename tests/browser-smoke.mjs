@@ -79,11 +79,12 @@ try {
       quietButton: !!document.getElementById('quietBtn'),
       fastButton: !!document.getElementById('fastBtn'),
       startNavigationButton: !!document.getElementById('startNavBtn'),
-      stopNavigationButton: !!document.getElementById('stopNavBtn')
+      stopNavigationButton: !!document.getElementById('stopNavBtn'),
+      routeHistoryTab: !!document.querySelector('[data-tab="history"]')
     };
   });
 
-  for (const key of ['serviceWorkerReady', 'manifestLoaded', 'offlineBoundaryCached', 'leafletLoaded', 'mapCreated', 'boundaryHttpOk', 'boundaryGzipOk', 'boundaryHasKrasnodarFeature', 'quietButton', 'fastButton', 'startNavigationButton', 'stopNavigationButton']) {
+  for (const key of ['serviceWorkerReady', 'manifestLoaded', 'offlineBoundaryCached', 'leafletLoaded', 'mapCreated', 'boundaryHttpOk', 'boundaryGzipOk', 'boundaryHasKrasnodarFeature', 'quietButton', 'fastButton', 'startNavigationButton', 'stopNavigationButton', 'routeHistoryTab']) {
     if (!result[key]) throw new Error('Browser check failed: ' + key);
   }
   if (!result.status.includes('Точный контур Краснодарского края загружен')) {
