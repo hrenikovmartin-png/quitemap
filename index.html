@@ -248,6 +248,29 @@ async function getFootRoute(coords){
 function haversine(a,b){const R=6371000,toRad=x=>x*Math.PI/180,dLat=toRad(b[1]-a[1]),dLon=toRad(b[0]-a[0]),x=Math.sin(dLat/2)**2+Math.cos(toRad(a[1]))*Math.cos(toRad(b[1]))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
 function minDistanceToReports(coords){if(!reports.length)return 99999;let min=99999;for(let i=0;i<coords.length;i+=Math.max(1,Math.floor(coords.length/80))){for(const r of reports)min=Math.min(min,haversine(coords[i],[r.lon,r.lat]))}return min}
 function routeNoisePenalty(route){const coords=route.geometry.coordinates;const radius=Number($('sensitivity').value);let penalty=0;for(const r of [...reports,...autoReports]){const d=minDistanceToReportsForOne(coords,r);const threshold=radius===1?90:radius===2?170:280;if(d<threshold){const weight=r.weight||1;penalty+=(threshold-d)*weight}}return penalty}
+function simplifyNoiseGeometry(coords,maxPoints=180,toleranceMeters=8){
+ if(!Array.isArray(coords)||coords.length<3)return Array.isArray(coords)?coords:null;
+ const clean=coords.filter(p=>Array.isArray(p)&&Number.isFinite(+p[0])&&Number.isFinite(+p[1])).map(p=>[+p[0],+p[1]]);
+ if(clean.length<3)return clean;
+ const avgLat=clean.reduce((sum,p)=>sum+p[1],0)/clean.length,cos=Math.max(0.15,Math.cos(avgLat*Math.PI/180));
+ const projected=clean.map(p=>[p[0]*111320*cos,p[1]*110540]);
+ const keep=new Uint8Array(clean.length);keep[0]=1;keep[clean.length-1]=1;
+ const stack=[[0,clean.length-1]];
+ while(stack.length){
+  const pair=stack.pop(),first=pair[0],last=pair[1];if(last-first<2)continue;
+  const a=projected[first],b=projected[last],dx=b[0]-a[0],dy=b[1]-a[1],den=dx*dx+dy*dy;
+  let best=toleranceMeters,bestIndex=-1;
+  for(let i=first+1;i<last;i++){
+   const p=projected[i],t=den?Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dy)/den)):0;
+   const d=Math.hypot(p[0]-a[0]-t*dx,p[1]-a[1]-t*dy);
+   if(d>best){best=d;bestIndex=i}
+  }
+  if(bestIndex>=0){keep[bestIndex]=1;stack.push([first,bestIndex],[bestIndex,last])}
+ }
+ let result=clean.filter((_,i)=>keep[i]);
+ if(result.length>maxPoints){const sampled=[];for(let i=0;i<maxPoints;i++)sampled.push(result[Math.round(i*(result.length-1)/(maxPoints-1))]);result=sampled}
+ return result;
+}
 async function loadAutomaticNoise(){
  if(points.length!==2){toast('Сначала выберите начало и конец маршрута');return}
  const a=points[0],b=points[1];
@@ -272,8 +295,7 @@ async function loadAutomaticNoise(){
   }
   if(!data)throw Error(lastError);
   const next=data.elements.map(el=>{
-   let geometry=Array.isArray(el.geometry)?el.geometry.map(p=>[+p.lon,+p.lat]).filter(p=>Number.isFinite(p[0])&&Number.isFinite(p[1])):null;
-   if(geometry&&geometry.length>60){const stride=(geometry.length-1)/59;geometry=Array.from({length:60},(_,i)=>geometry[Math.round(i*stride)])}
+   let geometry=Array.isArray(el.geometry)?simplifyNoiseGeometry(el.geometry.map(p=>[+p.lon,+p.lat])):null;
    const lat=Number.isFinite(el.lat)?el.lat:Number.isFinite(el.center?.lat)?el.center.lat:geometry?.length?geometry.reduce((v,p)=>v+p[1],0)/geometry.length:NaN;
    const lon=Number.isFinite(el.lon)?el.lon:Number.isFinite(el.center?.lon)?el.center.lon:geometry?.length?geometry.reduce((v,p)=>v+p[0],0)/geometry.length:NaN,t=el.tags||{};
    let reason='Дорога',weight=0.7;
