@@ -146,3 +146,10 @@ test('failed route-corridor lookup cannot reuse stale automatic noise features f
   assert.match(source, /routeQuietFeatures=quietFeatures\.filter\(feature=>minDistanceToReportsForOne\(\[\[a\.lng,a\.lat\],\[b\.lng,b\.lat\]\],feature\)<500\)/);
   assert.match(source, /autoReports=\[\];\s*toast\('Данные OSM для этого коридора недоступны/);
 });
+
+
+test('Overpass fallback uses a bounded total deadline rather than multiplying timeout by host count', () => {
+  assert.match(source, /const deadline=Date\.now\(\)\+Math\.max\(1000,Math\.min\(60000,Number\(timeout\)\|\|18000\)\)/);
+  assert.match(source, /const remaining=deadline-Date\.now\(\)/);
+  assert.match(source, /AbortSignal\.timeout\(Math\.min\(9000,remaining\)\)/);
+});
