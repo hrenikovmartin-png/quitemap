@@ -399,7 +399,7 @@ async function buildRoute(quiet,guard=null){
    const evidence=[...reports,...autoReports];
    const hasEvidence=evidence.length>0||routeQuietFeatures.length>0;
    const preference=route=>{const compact=simplifyNoiseGeometry(route.geometry.coordinates,120,12);return computeRoutePreference(compact,evidence,routeQuietFeatures,(_,feature)=>minDistanceToReportsForOne(compact,feature),Number($('sensitivity').value))};
-   const selection=hasEvidence?selectMeaningfullyQuieterRoute(base,acceptable,preference,{minimumRelativeImprovement:0.12,minimumAbsoluteImprovement:2,distanceMeters:haversine}):null;
+   const selection=hasEvidence?selectMeaningfullyQuieterRoute(base,acceptable,preference,{minimumRelativeImprovement:0.12,minimumAbsoluteImprovement:2,distanceMeters:(a,b)=>haversine(a,b)}):null;
    if(!hasEvidence)toast('Недостаточно данных OSM и отметок, чтобы подтвердить тихий вариант. Показан обычный пеший маршрут.');
    else if(!selection)toast('Не найден вариант с подтверждённым преимуществом по доступным данным. Показан обычный пеший маршрут.');
    chosen=selection?.route||base;
