@@ -36,6 +36,18 @@ function classifyTags(tags = {}) {
   if (NOISE_ROAD_WEIGHTS[highway]) {
     return { kind: 'noise', category: 'major-road', label: 'Оживлённая дорога', confidence: 'medium', weight: NOISE_ROAD_WEIGHTS[highway] };
   }
+  const maxSpeed = String(tags.maxspeed || '').match(/^\s*(\d+(?:\.\d+)?)\s*(?:km\/h|kmh)?\s*$/i);
+  const speed = maxSpeed ? Number(maxSpeed[1]) : null;
+  const laneCount = Number.parseInt(String(tags.lanes || '').match(/^\s*\d+/)?.[0] || '', 10);
+  if (highway && ((Number.isFinite(speed) && speed >= 70) ||
+      (Number.isFinite(laneCount) && laneCount >= 3 && Number.isFinite(speed) && speed >= 50))) {
+    return {
+      kind: 'noise', category: 'high-traffic-road',
+      label: 'Дорога с повышенной скоростью или числом полос',
+      confidence: 'low',
+      weight: Number.isFinite(speed) && speed >= 90 ? 1.5 : 1.15
+    };
+  }
   if (tags.railway && ['rail', 'tram', 'light_rail', 'subway'].includes(tags.railway)) {
     return { kind: 'noise', category: 'railway', label: 'Железная дорога', confidence: 'medium', weight: 2.1 };
   }
@@ -77,8 +89,8 @@ function classifyTags(tags = {}) {
     return { kind: 'quiet-feature', category: 'traffic-calmed', label: 'Улица с успокоением движения', confidence: 'low', weight: 0 };
   }
 
-  const speed = String(tags.maxspeed || '').match(/^\s*(\d+(?:\.\d+)?)\s*(?:km\/h|kmh)?\s*$/i);
-  if (speed && Number(speed[1]) <= 30 && highway) {
+  const lowSpeed = String(tags.maxspeed || '').match(/^\s*(\d+(?:\.\d+)?)\s*(?:km\/h|kmh)?\s*$/i);
+  if (lowSpeed && Number(lowSpeed[1]) <= 30 && highway) {
     return { kind: 'quiet-feature', category: 'low-speed-street', label: 'Улица с ограничением скорости до 30 км/ч', confidence: 'low', weight: 0 };
   }
   return null;
@@ -120,7 +132,7 @@ export function buildOverpassRouteQuery(bounds, { timeoutSeconds = 20 } = {}) {
   }
   const timeout = Math.max(5, Math.min(60, Math.floor(Number(timeoutSeconds) || 20)));
   const bbox = [south, west, north, east].join(',');
-  return `[out:json][timeout:${timeout}][maxsize:67108864];(nwr[leisure~"^(park|garden|nature_reserve|recreation_ground)$"](${bbox});nwr[landuse~"^(forest|village_green|recreation_ground|industrial|commercial)$"](${bbox});nwr[highway~"^(pedestrian|footway|path|steps|cycleway|living_street|motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link)$"](${bbox});nwr[highway][maxspeed~"^(20|30)( ?km/h)?$"](${bbox});nwr[route~"^(foot|hiking)$"](${bbox});nwr[traffic_calming](${bbox});nwr[railway~"^(rail|tram|light_rail|subway)$"](${bbox});nwr[leisure=stadium](${bbox});nwr[amenity~"^(fuel|nightclub|bar)$"](${bbox}););out geom tags;`;
+  return `[out:json][timeout:${timeout}][maxsize:67108864];(nwr[leisure~"^(park|garden|nature_reserve|recreation_ground)$"](${bbox});nwr[landuse~"^(forest|village_green|recreation_ground|industrial|commercial)$"](${bbox});nwr[highway~"^(pedestrian|footway|path|steps|cycleway|living_street|motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link)$"](${bbox});nwr[highway][lanes~"^[3-9]"](${bbox});nwr[highway][maxspeed~"^(40|50|60|70|80|90|100|110|120)( ?km/h)?$"](${bbox});nwr[highway][maxspeed~"^(20|30)( ?km/h)?$"](${bbox});nwr[route~"^(foot|hiking)$"](${bbox});nwr[traffic_calming](${bbox});nwr[railway~"^(rail|tram|light_rail|subway)$"](${bbox});nwr[leisure=stadium](${bbox});nwr[amenity~"^(fuel|nightclub|bar)$"](${bbox}););out geom tags;`;
 }
 
 export function normalizeOSMFeatures(elements, isInside) {
