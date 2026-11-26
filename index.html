@@ -106,6 +106,7 @@ html{scroll-behavior:smooth}body{-webkit-font-smoothing:antialiased;line-height:
 <script type="module">
 import { haversine, bearingBetween, nearestRouteSegment } from './src/navigation/geometry.mjs';
 import { computeRouteNoisePenalty, computeQuietnessScore } from './src/routing/quiet-score.mjs';
+import { buildOverpassPlacesQuery, normalizeOSMFeatures, splitOSMFeatures } from './src/data/osm-features.mjs';
 (()=>{'use strict';
 if(!window.L){
   const status=document.getElementById('mapStatus');
@@ -115,7 +116,7 @@ if(!window.L){
   return;
 }
 const $=id=>document.getElementById(id);const store={get(k,d){try{return JSON.parse(localStorage.getItem('qwmax_'+k))??d}catch{return d}},set(k,v){try{localStorage.setItem('qwmax_'+k,JSON.stringify(v))}catch{}}};
-let map,lightLayer,darkLayer,points=[],pointMarkers=[],routeLayer=null,placeLayer=null,reportLayers=[],autoReports=[],places=[],favorites=store.get('favorites',[]),customFavorites=store.get('customFavorites',[]),reports=store.get('reports',[]),routeHistory=(Array.isArray(store.get('routeHistory',[]))?store.get('routeHistory',[]):[]).filter(r=>r&&Number.isFinite(+r.start?.lat)&&Number.isFinite(+r.start?.lng)&&Number.isFinite(+r.end?.lat)&&Number.isFinite(+r.end?.lng)),reportMode=false,activeTab='places',lastRoute=null,searchMarker=null,toastTimer,watchId=null,gpsMarker=null,navActive=false,lastNavVoice=0,kraiGeometry=null,kraiGeometries=[],lastGpsFix=null,lastNearestIndex=0,offRouteCount=0,rerouting=false,lastTurnIndex=-1,navSession=0,kraiBoundarySegments=[];
+let map,lightLayer,darkLayer,points=[],pointMarkers=[],routeLayer=null,placeLayer=null,reportLayers=[],autoReports=[],places=[],quietFeatures=[],favorites=store.get('favorites',[]),customFavorites=store.get('customFavorites',[]),reports=store.get('reports',[]),routeHistory=(Array.isArray(store.get('routeHistory',[]))?store.get('routeHistory',[]):[]).filter(r=>r&&Number.isFinite(+r.start?.lat)&&Number.isFinite(+r.start?.lng)&&Number.isFinite(+r.end?.lat)&&Number.isFinite(+r.end?.lng)),reportMode=false,activeTab='places',lastRoute=null,searchMarker=null,toastTimer,watchId=null,gpsMarker=null,navActive=false,lastNavVoice=0,kraiGeometry=null,kraiGeometries=[],lastGpsFix=null,lastNearestIndex=0,offRouteCount=0,rerouting=false,lastTurnIndex=-1,navSession=0,kraiBoundarySegments=[];
 let orsKey=store.get('orsKey',''),cartoKey=store.get('cartoKey','');
 const sensitivityNames={1:'Мягкая',2:'Средняя',3:'Строгая'};
 // Работа с точками и маршрутами разрешается только после загрузки границ сервисной области QuietWalk: Краснодарский край и Адыгея.
@@ -296,43 +297,20 @@ async function loadAutomaticNoise(){
  const q='[out:json][timeout:18][maxsize:67108864];(way[highway~"^(motorway|trunk|primary|secondary|tertiary|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"]('+bbox+');way[railway~"^(rail|tram|light_rail|subway)$"]('+bbox+');way[landuse~"^(industrial|commercial)$"]('+bbox+');way[leisure=stadium]('+bbox+');node[amenity~"^(fuel|nightclub|bar)$"]('+bbox+'););out geom tags;';
  const button=$('autoNoiseBtn');if(button)button.disabled=true;
  setStatus('Загружаем шумовые зоны из OpenStreetMap…');
- const hosts=['https://ovp.dresel.systems/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter','https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter'];
- let data=null,lastError='Сервисы Overpass не ответили';
  try{
-  for(const host of hosts){
-   try{
-    const response=await fetch(host,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','Accept':'application/json'},body:new URLSearchParams({data:q}).toString(),signal:AbortSignal.timeout(20000),cache:'no-store'});
-    if(!response.ok){lastError='HTTP '+response.status+' от '+new URL(host).hostname;continue}
-    const parsed=await response.json();
-    if(!parsed||!Array.isArray(parsed.elements)){lastError='Сервис вернул неожиданный формат данных';continue}
-    data=parsed;break;
-   }catch(e){lastError=(e&&e.name==='TimeoutError')?'Истекло время ожидания Overpass':(e&&e.message)||'Ошибка сети'}
-  }
-  if(!data)throw Error(lastError);
-  const next=data.elements.map(el=>{
-   let geometry=Array.isArray(el.geometry)?simplifyNoiseGeometry(el.geometry.map(p=>[+p.lon,+p.lat])):null;
-   const rawLat=Number.isFinite(el.lat)?el.lat:Number.isFinite(el.center?.lat)?el.center.lat:geometry?.length?geometry.reduce((v,p)=>v+p[1],0)/geometry.length:NaN;
-   const rawLon=Number.isFinite(el.lon)?el.lon:Number.isFinite(el.center?.lon)?el.center.lon:geometry?.length?geometry.reduce((v,p)=>v+p[0],0)/geometry.length:NaN;
-   const insideGeometry=geometry?geometry.filter(p=>inKrasnodarKrai(p[1],p[0])):[];
-   const lat=inKrasnodarKrai(rawLat,rawLon)?rawLat:insideGeometry.length?insideGeometry.reduce((v,p)=>v+p[1],0)/insideGeometry.length:rawLat;
-   const lon=inKrasnodarKrai(rawLat,rawLon)?rawLon:insideGeometry.length?insideGeometry.reduce((v,p)=>v+p[0],0)/insideGeometry.length:rawLon,t=el.tags||{};
-   let reason='Дорога',weight=0.7;
-   if(t.railway){reason='Железная дорога';weight=2.1}
-   else if(t.landuse==='industrial'){reason='Промышленная зона';weight=2.0}
-   else if(t.landuse==='commercial'){reason='Коммерческая зона';weight=0.8}
-   else if(t.leisure==='stadium'){reason='Стадион';weight=1.5}
-   else if(t.amenity==='fuel'){reason='Автозаправка';weight=1.1}
-   else if(t.amenity==='nightclub'||t.amenity==='bar'){reason='Ночное заведение';weight=1.3}
-   if(t.highway==='motorway'||t.highway==='trunk')weight=2.0;
-   else if(t.highway==='primary'||t.highway==='primary_link')weight=1.6;
-   else if(t.highway==='secondary'||t.highway==='secondary_link')weight=1.25;
-   else if(t.highway==='tertiary'||t.highway==='tertiary_link')weight=0.9;
-   return {lat,lon,geometry,reason,weight,highway:t.highway||null,automatic:true,osmType:el.type,osmId:el.id};
-  }).filter(x=>Number.isFinite(x.lat)&&Number.isFinite(x.lon)&&(inKrasnodarKrai(x.lat,x.lon)||(Array.isArray(x.geometry)&&x.geometry.some(p=>inKrasnodarKrai(p[1],p[0])))));
-  const unique=new Map();for(const item of next)unique.set(item.osmType+':'+item.osmId,item);
-  const result=[...unique.values()];
-  if(!result.length)throw Error('OpenStreetMap не вернул шумовых объектов в выбранной области');
-  autoReports=result;drawReports();
+  const data=await requestOverpass(q,20000);
+  const normalized=normalizeOSMFeatures(data.elements,inKrasnodarKrai);
+  const split=splitOSMFeatures(normalized);
+  const sourceById=new Map(data.elements.map(element=>[element.type+':'+element.id,element]));
+  const result=split.noiseFeatures.map(feature=>{
+   const original=sourceById.get(feature.id);
+   const geometry=Array.isArray(original?.geometry)?simplifyNoiseGeometry(original.geometry.map(point=>[+point.lon,+point.lat])):feature.geometry;
+   return {...feature,id:feature.osmId,reason:feature.label,highway:feature.tags?.highway||null,railway:feature.tags?.railway||null,geometry,automatic:true};
+  });
+  const unique=new Map();for(const item of result)unique.set(item.osmType+':'+item.osmId,item);
+  const deduplicated=[...unique.values()];
+  if(!deduplicated.length)throw Error('OpenStreetMap не вернул шумовых объектов в выбранной области');
+  autoReports=deduplicated;drawReports();
   setStatus('Автоматически найдено потенциальных источников шума: '+autoReports.length);
   toast('Найдено объектов: '+autoReports.length+'. Источник: OpenStreetMap. Это оценка по типам объектов и дорог, не измерение децибел. Теперь постройте тихий маршрут.');
  }catch(e){
@@ -567,8 +545,53 @@ function clearReports(){if(!confirm('Удалить все ваши шумовы
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function addPlaceMarker(p,layer){L.marker([p.lat,p.lon]).addTo(layer||map).bindPopup('<div class="popup-title">'+escapeHtml(p.name)+'</div><div style="font-size:12px">'+escapeHtml(p.type||'Место')+'</div><div class="popup-actions"><button onclick="window.qwFavorite('+p.id+')">В избранное</button><button onclick="window.qwNoise('+p.lat+','+p.lon+')">Отметить шум</button></div>')}
 window.qwFavorite=id=>{const p=places.find(x=>String(x.id)===String(id));if(!p)return;const exists=favorites.some(f=>String(typeof f==='object'?f.id:f)===String(id));favorites=exists?favorites.filter(f=>String(typeof f==='object'?f.id:f)!==String(id)):[...favorites,{id:p.id,name:p.name,lat:p.lat,lon:p.lon,type:p.type}];store.set('favorites',favorites);renderList();toast(exists?'Удалено из избранного':'Добавлено в избранное')};
-async function loadPlaces(){// Загружаем реальные объекты OSM вокруг центра карты. Отсутствие ответа не ломает приложение.
-try{const c=map.getCenter(),q='[out:json][timeout:15];(node[leisure~"park|garden|nature_reserve"](around:5500,'+c.lat+','+c.lng+');way[leisure~"park|garden|nature_reserve"](around:5500,'+c.lat+','+c.lng+'););out center tags;';let r=null;for(const h of ['https://maps.mail.ru/osm/tools/overpass/api/interpreter','https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter']){try{const x=await fetch(h+'?data='+encodeURIComponent(q),{signal:AbortSignal.timeout(15000)});if(x.ok){r=x;break}}catch(e){}}if(!r)throw Error('OSM unavailable');const d=await r.json();places=(Array.isArray(d.elements)?d.elements:[]).map((x,i)=>({id:x.id,lat:x.lat??x.center?.lat,lon:x.lon??x.center?.lon,name:x.tags?.name||x.tags?.leisure||'Зелёная зона',type:x.tags?.leisure||'зелёная зона'})).filter(x=>Number.isFinite(x.lat)&&Number.isFinite(x.lon)&&inKrasnodarKrai(x.lat,x.lon)).slice(0,35);renderList();setStatus(places.length?'Найдено зелёных мест: '+places.length:'Карта готова к прогулке')}catch(e){places=[];renderList();$('listArea').innerHTML='<div class="empty">Не удалось загрузить зелёные места из OpenStreetMap. Карта, поиск и построение маршрута продолжают работать.</div>'}}
+async function requestOverpass(query,timeout=18000){
+ const hosts=['https://ovp.dresel.systems/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter','https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter'];
+ let lastError='Сервисы Overpass не ответили';
+ for(const host of hosts){
+  try{
+   const response=await fetch(host,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','Accept':'application/json'},body:new URLSearchParams({data:query}).toString(),signal:AbortSignal.timeout(timeout),cache:'no-store'});
+   if(!response.ok){lastError='HTTP '+response.status+' от '+new URL(host).hostname;continue}
+   const data=await response.json();
+   if(data&&Array.isArray(data.elements))return data;
+   lastError='Сервис вернул неожиданный формат данных';
+  }catch(error){lastError=error?.name==='TimeoutError'?'Истекло время ожидания Overpass':error?.message||'Ошибка сети'}
+ }
+ throw Error(lastError);
+}
+async function loadPlaces(){
+ if(!kraiGeometry)return;
+ // Зелёные зоны и пешеходная инфраструктура классифицируются по тегам OSM.
+ // Точные координаты каждого объекта дополнительно проверяются по контуру региона.
+ try{
+  const center=map.getCenter();
+  const bounds={
+   south:Math.max(KRAI_BOUNDS.south,center.lat-0.05),
+   west:Math.max(KRAI_BOUNDS.west,center.lng-0.06),
+   north:Math.min(KRAI_BOUNDS.north,center.lat+0.05),
+   east:Math.min(KRAI_BOUNDS.east,center.lng+0.06)
+  };
+  const cacheKey=[Math.round(center.lat*50),Math.round(center.lng*50)].join(':');
+  const cached=store.get('osmPlacesCache',null);
+  let normalized=null;
+  if(cached&&cached.key===cacheKey&&cached.expiresAt>Date.now()&&Array.isArray(cached.features)){
+   normalized=cached.features.filter(feature=>inKrasnodarKrai(feature.lat,feature.lon));
+  }else{
+   const data=await requestOverpass(buildOverpassPlacesQuery(bounds),16000);
+   normalized=normalizeOSMFeatures(data.elements,inKrasnodarKrai);
+   store.set('osmPlacesCache',{key:cacheKey,expiresAt:Date.now()+6*60*60*1000,features:normalized.slice(0,300)});
+  }
+  const split=splitOSMFeatures(normalized);
+  quietFeatures=split.quietFeatures;
+  places=quietFeatures.slice(0,120).map(feature=>({...feature,id:feature.osmId,type:feature.label+' · OpenStreetMap'}));
+  if(placeLayer){placeLayer.clearLayers();places.forEach(place=>addPlaceMarker(place,placeLayer))}
+  renderList();
+  setStatus(places.length?'Найдено тихих мест и пешеходных объектов OSM: '+places.length:'В этой области пока не найдено подходящих объектов OSM');
+ }catch(error){
+  places=[];quietFeatures=[];renderList();
+  $('listArea').innerHTML='<div class="empty">Не удалось загрузить тихие места из OpenStreetMap. Карта, поиск и построение маршрута продолжают работать.</div>';
+ }
+}
 function restoreHistoryRoute(id){
  const item=routeHistory.find(entry=>String(entry.id)===String(id));
  if(!item||!inKrasnodarKrai(item.start?.lat,item.start?.lng)||!inKrasnodarKrai(item.end?.lat,item.end?.lng)){
