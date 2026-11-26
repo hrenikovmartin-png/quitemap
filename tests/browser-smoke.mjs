@@ -191,11 +191,11 @@ try {
   await page.click('#resetBtn');
   await page.fill('#searchInput', 'TEST_START');
   await page.click('#searchBtn');
-  await page.waitForSelector('.leaflet-popup', { timeout: 15000 });
+  await page.waitForFunction(() => (document.getElementById('searchInput')?.value || '').includes('Краснодар'), { timeout: 15000 });
   await page.evaluate(() => window.qwUseSearch());
   await page.fill('#searchInput', 'TEST_END');
   await page.click('#searchBtn');
-  await page.waitForFunction(() => !!document.querySelector('.leaflet-popup'), { timeout: 15000 });
+  await page.waitForFunction(() => (document.getElementById('searchInput')?.value || '').includes('Краснодар'), { timeout: 15000 });
   await page.evaluate(() => window.qwUseSearch());
   await page.click('#quietBtn');
   await page.waitForFunction(() => (document.getElementById('routeTitle')?.textContent || '').includes('Тихий маршрут'), { timeout: 30000 });
