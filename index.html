@@ -649,7 +649,7 @@ async function loadPlaces(){
   if(!cachedCell||!Number.isFinite(cachedCell.fetchedAt)||Date.now()-cachedCell.fetchedAt>7*24*60*60*1000||!Array.isArray(cachedCell.features)){
    const data=await requestOverpass(buildOverpassPlacesQuery(cell.bounds),16000);
    const normalized=normalizeOSMFeatures(data.elements,inKrasnodarKrai);
-   nextCache=mergePlaceCells(cache,cell.key,normalized);
+   nextCache=mergePlaceCells(cache,cell.key,normalized.slice(0,180));
    store.set('osmPlacesRegionalCacheV1',nextCache);
   }
   const regionalFeatures=readPlaceCells(nextCache).filter(feature=>inKrasnodarKrai(feature.lat,feature.lon));
