@@ -115,6 +115,54 @@ export function computeQuietnessScore(coords, reports, distanceToReport, sensiti
   return Math.max(0, Math.min(100, Math.round(100 * Math.exp(-1.2 * averageExposure))));
 }
 
+
+const QUIET_FEATURE_PROFILES = {
+  'green-space': { radius: 260, weight: 1.4, group: 'green' },
+  'pedestrian-way': { radius: 75, weight: 1.8, group: 'pedestrian' },
+  'hiking-route': { radius: 100, weight: 1.6, group: 'pedestrian' },
+  'calm-street': { radius: 70, weight: 1.3, group: 'calm-street' },
+  'low-speed-street': { radius: 55, weight: 0.9, group: 'calm-street' },
+  'traffic-calmed': { radius: 35, weight: 0.6, group: 'calm-street' }
+};
+
+/**
+ * Returns a 0–100 evidence bonus for mapped green and pedestrian features.
+ * This is a map-derived heuristic, not an acoustic measurement or guarantee.
+ * The best feature in each group is used to limit duplicate OSM-tag inflation.
+ */
+export function computeRouteQuietFeatureBonus(coords, features, distanceToFeature, sensitivity = 2) {
+  if (!validCoordinates(coords) || !Array.isArray(features) ||
+      typeof distanceToFeature !== 'function') return null;
+  const scale = SENSITIVITY[sensitivity] || SENSITIVITY[2];
+  const bestByGroup = new Map();
+  for (const feature of features) {
+    const profile = QUIET_FEATURE_PROFILES[feature?.category];
+    if (!profile) continue;
+    const distance = distanceToFeature(coords, feature);
+    if (!Number.isFinite(distance) || distance < 0) continue;
+    const proximity = Math.max(0, 1 - distance / (profile.radius * scale));
+    const value = proximity * profile.weight;
+    bestByGroup.set(profile.group, Math.max(bestByGroup.get(profile.group) || 0, value));
+  }
+  const evidence = [...bestByGroup.values()].reduce((sum, value) => sum + value, 0);
+  return Math.max(0, Math.min(100, Math.round(100 * (1 - Math.exp(-0.55 * evidence)))));
+}
+
+/**
+ * Lower is better. Noise exposure is penalized and mapped quiet features
+ * provide a bounded evidence bonus; no bonus is awarded for unclassified roads.
+ */
+export function computeRoutePreference(coords, noiseSources, quietFeatures, distanceToFeature, sensitivity = 2) {
+  const noisePenalty = computeRouteNoisePenalty(coords, noiseSources, distanceToFeature, sensitivity);
+  const quietBonus = computeRouteQuietFeatureBonus(coords, quietFeatures, distanceToFeature, sensitivity);
+  if (!Number.isFinite(noisePenalty) || quietBonus === null) return null;
+  return {
+    noisePenalty,
+    quietBonus,
+    score: noisePenalty - quietBonus * 1.25
+  };
+}
+
 export function compareRouteNoise(coordsA, coordsB, reports, distanceToReport, sensitivity = 2) {
   const a = computeRouteNoisePenalty(coordsA, reports, distanceToReport, sensitivity);
   const b = computeRouteNoisePenalty(coordsB, reports, distanceToReport, sensitivity);
