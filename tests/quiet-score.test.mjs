@@ -7,7 +7,7 @@ const distance = (points, report) => report.distance;
 test('route penalty respects proximity, source weights and sensitivity', () => {
   const route = [[38.9, 45.0], [38.91, 45.01]];
   const reports = [{ distance: 80, weight: 2, influenceRadius: 200 }];
-  assert.ok(computeRouteNoisePenalty(route, reports, distance, 1) >
+  assert.ok(computeRouteNoisePenalty(route, reports, distance, 1) <
     computeRouteNoisePenalty(route, reports, distance, 2));
   assert.ok(computeRouteNoisePenalty(route, reports, distance, 3) >
     computeRouteNoisePenalty(route, reports, distance, 2));
