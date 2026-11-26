@@ -3,10 +3,23 @@
  * Scores are relative OSM/user evidence, never measured sound levels.
  */
 export function routeGeometrySimilarity(a, b, distanceMeters) {
-  if (!Array.isArray(a) || !Array.isArray(b) || !a.length || !b.length ||
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length < 2 || b.length < 2 ||
       typeof distanceMeters !== 'function') return 0;
-  const sample = (coords, count = 24) => Array.from({ length: count }, (_, i) =>
-    coords[Math.round(i * (coords.length - 1) / (count - 1))]);
+  // Sample along every segment, not only at existing vertices: two identical
+  // polylines may have very different vertex counts and spacing.
+  const sample = coords => {
+    const points = [];
+    for (let i = 1; i < coords.length; i++) {
+      const from = coords[i - 1], to = coords[i];
+      const steps = Math.max(1, Math.min(32, Math.ceil(distanceMeters(from, to) / 25)));
+      for (let step = 0; step < steps; step++) {
+        const t = step / steps;
+        points.push([from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t]);
+      }
+    }
+    points.push(coords[coords.length - 1]);
+    return points;
+  };
   const aa = sample(a), bb = sample(b);
   const directed = (from, to) => from.reduce((sum, point) =>
     sum + Math.min(...to.map(other => distanceMeters(point, other))), 0) / from.length;
