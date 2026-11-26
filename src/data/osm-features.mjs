@@ -69,6 +69,10 @@ function classifyTags(tags = {}) {
     }
   }
 
+  if (['foot', 'hiking'].includes(String(tags.route || ''))) {
+    return { kind: 'quiet-feature', category: 'hiking-route', label: 'Пешеходный или туристический маршрут', confidence: 'medium', weight: 0 };
+  }
+
   if (tags.traffic_calming) {
     return { kind: 'quiet-feature', category: 'traffic-calmed', label: 'Улица с успокоением движения', confidence: 'low', weight: 0 };
   }
@@ -94,7 +98,7 @@ export function buildOverpassPlacesQuery(bounds, { timeoutSeconds = 20 } = {}) {
   }
   const timeout = Math.max(5, Math.min(60, Math.floor(Number(timeoutSeconds) || 20)));
   const bbox = [south, west, north, east].join(',');
-  return `[out:json][timeout:${timeout}];(nwr[leisure~"^(park|garden|nature_reserve|recreation_ground)$"](${bbox});nwr[landuse~"^(forest|village_green|recreation_ground)$"](${bbox});nwr[highway~"^(pedestrian|footway|path|steps|cycleway|living_street)$"](${bbox});nwr[traffic_calming](${bbox}););out center tags;`;
+  return `[out:json][timeout:${timeout}];(nwr[leisure~"^(park|garden|nature_reserve|recreation_ground)$"](${bbox});nwr[landuse~"^(forest|village_green|recreation_ground)$"](${bbox});nwr[highway~"^(pedestrian|footway|path|steps|cycleway|living_street)$"](${bbox});nwr[highway][maxspeed~"^(20|30)( ?km/h)?$"](${bbox});nwr[route~"^(foot|hiking)$"](${bbox});nwr[traffic_calming](${bbox}););out center tags;`;
 }
 
 /**
