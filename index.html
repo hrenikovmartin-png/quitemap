@@ -252,7 +252,7 @@ async function getFootRoute(coords,{alternatives=false}={}) {
     const request=async body=>fetch(endpoint,{method:'POST',headers:{'Authorization':orsKey,'Content-Type':'application/json','Accept':'application/geo+json, application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(25000)});
     const baseBody={coordinates:coords,instructions:true,preference:'recommended'};
     const attempts=[];
-    if(alternatives)attempts.push({...baseBody,alternative_routes:{target_count:3,weight_factor:1.4,share_factor:0.6},...(polygons?{options:{avoid_polygons:polygons}}:{})});
+    if(alternatives){attempts.push({...baseBody,alternative_routes:{target_count:3,weight_factor:1.4,share_factor:0.6},...(polygons?{options:{avoid_polygons:polygons}}:{})});if(polygons)attempts.push({...baseBody,alternative_routes:{target_count:3,weight_factor:1.4,share_factor:0.6}});}
     if(polygons)attempts.push({...baseBody,options:{avoid_polygons:polygons}});
     attempts.push(baseBody);
     for(const body of attempts){
@@ -401,7 +401,7 @@ async function buildRoute(quiet,guard=null){
  setStatus(quiet?'Ищем альтернативный спокойный путь…':'Строим пеший маршрут…');$('quietBtn').disabled=$('fastBtn').disabled=true;
  try{
   const a=points[0],b=points[1],start=[a.lng,a.lat],finish=[b.lng,b.lat];
-  let chosen,base,detour=0;
+  let chosen,base,detour=0,quietSelected=false;
   base=await getFootRoute([start,finish],{alternatives:quiet});
   if(quiet){
    setStatus('Анализируем тихие улицы, зелёные зоны и потенциальный шум…');
@@ -445,21 +445,22 @@ async function buildRoute(quiet,guard=null){
    })[0];
    detour=Math.max(0,(chosen.distance/base.distance-1)*100);
   }
+  quietSelected=!!(quiet&&chosen!==base&&detour>=1.5);
   if(!routeInsideKrai(chosen))throw Error('Полученный маршрут выходит за пределы области QuietWalk и был отменён');
   if(guard&&!guard())return;
   if(routeLayer)map.removeLayer(routeLayer);
   routeLayer=L.geoJSON({type:'Feature',geometry:chosen.geometry,properties:{}},{style:{color:quiet?'#e0457f':'#397bc7',weight:6,opacity:.9,lineCap:'round',className:'qw-route'}}).addTo(map);
   map.fitBounds(routeLayer.getBounds().pad(0.08),{padding:[30,30],maxZoom:17});clampMapCamera();
   const km=chosen.distance/1000,min=chosen.duration/60;
-  lastRoute={quiet,coords:chosen.geometry.coordinates,distance:chosen.distance,duration:chosen.duration,detour,steps:chosen.steps||[]};
-  const historyEntry={id:Date.now(),start:{lat:a.lat,lng:a.lng},end:{lat:b.lat,lng:b.lng},quiet:!!quiet,distance:chosen.distance,duration:chosen.duration,detour,created:new Date().toISOString()};
+  lastRoute={quiet:quietSelected,coords:chosen.geometry.coordinates,distance:chosen.distance,duration:chosen.duration,detour,steps:chosen.steps||[]};
+  const historyEntry={id:Date.now(),start:{lat:a.lat,lng:a.lng},end:{lat:b.lat,lng:b.lng},quiet:quietSelected,distance:chosen.distance,duration:chosen.duration,detour,created:new Date().toISOString()};
   routeHistory=[historyEntry,...routeHistory.filter(item=>!(item.quiet===historyEntry.quiet&&Math.abs(item.start.lat-historyEntry.start.lat)<0.00001&&Math.abs(item.start.lng-historyEntry.start.lng)<0.00001&&Math.abs(item.end.lat-historyEntry.end.lat)<0.00001&&Math.abs(item.end.lng-historyEntry.end.lng)<0.00001))].slice(0,12);
   store.set('routeHistory',routeHistory);if(activeTab==='history')renderList();
   $('routeCard').style.display='block';
-  $('routeTitle').textContent=quiet?'Альтернативный маршрут':'Кратчайший пеший маршрут';
-  $('routeDesc').textContent=quiet?((reports.length||autoReports.length||routeQuietFeatures.length)?'Маршрут подобран с учётом '+([...(autoReports.length?['объектов OpenStreetMap']:[]),...(reports.length?['ваших шумовых отметок']:[]),...(routeQuietFeatures.length?['тихой инфраструктуры']:[])].join(', '))+'. '+routeNoiseExplanation(base,chosen):(detour>1?'Подобран обходной вариант. Без данных о шуме и тихой инфраструктуре это эвристика, а не гарантия тишины.':'Заметно более тихий обход без большого крюка не найден; маршрут совпадает с кратчайшим.')):(orsKey?'Кратчайший пеший вариант через OpenRouteService.':'Кратчайший доступный пеший вариант через резервный маршрутизатор.');
-  $('distance').textContent=km.toFixed(2)+' км';$('duration').textContent=(m=>m>=60?Math.floor(m/60)+' ч '+(m%60)+' мин':m+' мин')(Math.max(1,Math.round(min)));$('detour').textContent=quiet?'+'+Math.round(detour)+'%':'—';qwScore(chosen.geometry.coordinates);
-  setStatus(quiet?'Альтернативный маршрут построен':'Кратчайший пеший маршрут построен');toast('Маршрут готов. Проверьте его перед выходом.');
+  $('routeTitle').textContent=quietSelected?'Тихий маршрут':'Кратчайший пеший маршрут';
+  $('routeDesc').textContent=quietSelected?((reports.length||autoReports.length||routeQuietFeatures.length)?'Вариант выбран с учётом '+([...(autoReports.length?['объектов OpenStreetMap']:[]),...(reports.length?['ваших шумовых отметок']:[]),...(routeQuietFeatures.length?['тихой инфраструктуры']:[])].join(', '))+'. '+routeNoiseExplanation(base,chosen):(detour>1?'Подобран обходной вариант. Без данных о шуме и тихой инфраструктуре это эвристика, а не гарантия тишины.':'Доступные данные не подтверждают преимущество по тишине.')):(quiet?'Не найден подходящий альтернативный путь с преимуществом по доступным данным; показан кратчайший пеший маршрут.':(orsKey?'Кратчайший пеший вариант через OpenRouteService.':'Кратчайший доступный пеший вариант через резервный маршрутизатор.'));
+  $('distance').textContent=km.toFixed(2)+' км';$('duration').textContent=(m=>m>=60?Math.floor(m/60)+' ч '+(m%60)+' мин':m+' мин')(Math.max(1,Math.round(min)));$('detour').textContent=quietSelected?'+'+Math.round(detour)+'%':'—';qwScore(chosen.geometry.coordinates);
+  setStatus(quietSelected?'Тихий маршрут построен':(quiet?'Построен кратчайший пеший маршрут — тихий обход не найден':'Кратчайший пеший маршрут построен'));toast('Маршрут готов. Проверьте его перед выходом.');
  }catch(e){console.error(e);toast(e.message+' Попробуйте ещё раз или выберите другие точки.');setStatus('Не удалось построить маршрут')}
  finally{$('quietBtn').disabled=$('fastBtn').disabled=false}
 }
