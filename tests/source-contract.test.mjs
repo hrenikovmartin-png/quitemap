@@ -100,3 +100,10 @@ test('the map remains fully tiled outside the highlighted QuietWalk service area
   assert.match(source, /maxBoundsViscosity:1/);
   assert.match(source, /\.leaflet-container\{background:#f2f0e9\}/);
 });
+
+test('GPS navigation smooths fixes and uses geographic lon/lat order for heading', () => {
+  assert.match(source, /import \{ filterGpsFix \} from '\.\/src\/navigation\/gps-filter\.mjs'/);
+  assert.match(source, /const filtered=filterGpsFix\(previousFix,/);
+  assert.match(source, /bearingBetween\(\[previousFix\.lon,previousFix\.lat\],\[lon,lat\]\)/);
+  assert.match(source, /pos\.timestamp>now\+5000/);
+});
