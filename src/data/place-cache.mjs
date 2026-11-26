@@ -1,7 +1,7 @@
 const LAT_STEP = 0.08;
 const LON_STEP = 0.10;
 export const PLACE_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
-export const PLACE_CACHE_MAX_CELLS = 48;
+export const PLACE_CACHE_MAX_CELLS = 16;
 
 export function getPlaceCell(lat, lon, bounds) {
   const latitude = Number(lat), longitude = Number(lon);
