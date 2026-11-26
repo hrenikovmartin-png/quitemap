@@ -398,7 +398,7 @@ async function buildRoute(quiet,guard=null){
    const pool=acceptable.length?acceptable:[base];if(!acceptable.length)toast('Тихого обхода без большого крюка не нашлось, оставлен кратчайший путь');
    // Сначала избегаем пользовательских шумовых отметок. При равной оценке предпочитаем
    // умеренный обход, поэтому тихий режим отличается от кратчайшего даже без отметок.
-   const preference=route=>{const compact=simplifyNoiseGeometry(route.geometry.coordinates,120,12);return computeRoutePreference(route.geometry.coordinates,[...reports,...autoReports],routeQuietFeatures,(_,feature)=>minDistanceToReportsForOne(compact,feature),Number($('sensitivity').value))?.score??routeNoisePenalty(route)};
+   const preference=route=>{const compact=simplifyNoiseGeometry(route.geometry.coordinates,120,12);return computeRoutePreference(compact,[...reports,...autoReports],routeQuietFeatures,(_,feature)=>minDistanceToReportsForOne(compact,feature),Number($('sensitivity').value))?.score??routeNoisePenalty({...route,geometry:{...route.geometry,coordinates:compact}})};
    chosen=pool.sort((x,y)=>{
     const scoreDiff=preference(x)-preference(y);
     if(Math.abs(scoreDiff)>1)return scoreDiff;
@@ -418,7 +418,7 @@ async function buildRoute(quiet,guard=null){
   store.set('routeHistory',routeHistory);if(activeTab==='history')renderList();
   $('routeCard').style.display='block';
   $('routeTitle').textContent=quiet?'Альтернативный маршрут':'Кратчайший пеший маршрут';
-  $('routeDesc').textContent=quiet?((reports.length||autoReports.length)?'Подобран вариант с учётом '+(autoReports.length?'автоматически найденных объектов OpenStreetMap':'ваших шумовых отметок')+'. '+routeNoiseExplanation(base,chosen):(detour>1?'Подобран обходной вариант. Без шумовых данных это эвристика, а не гарантия тишины.':'Заметно тише обход без большого крюка не нашёлся, маршрут совпадает с кратчайшим. Добавьте шумовые отметки или найдите шумовые зоны автоматически.')):(orsKey?'Кратчайший пеший вариант через OpenRouteService.':'Кратчайший доступный пеший вариант через резервный маршрутизатор.');
+  $('routeDesc').textContent=quiet?((reports.length||autoReports.length||routeQuietFeatures.length)?'Маршрут подобран с учётом '+([...(autoReports.length?['объектов OpenStreetMap']:[]),...(reports.length?['ваших шумовых отметок']:[]),...(routeQuietFeatures.length?['тихой инфраструктуры']:[])].join(', '))+'. '+routeNoiseExplanation(base,chosen):(detour>1?'Подобран обходной вариант. Без данных о шуме и тихой инфраструктуре это эвристика, а не гарантия тишины.':'Заметно более тихий обход без большого крюка не найден; маршрут совпадает с кратчайшим.')):(orsKey?'Кратчайший пеший вариант через OpenRouteService.':'Кратчайший доступный пеший вариант через резервный маршрутизатор.');
   $('distance').textContent=km.toFixed(2)+' км';$('duration').textContent=(m=>m>=60?Math.floor(m/60)+' ч '+(m%60)+' мин':m+' мин')(Math.max(1,Math.round(min)));$('detour').textContent=quiet?'+'+Math.round(detour)+'%':'—';qwScore(chosen.geometry.coordinates);
   setStatus(quiet?'Альтернативный маршрут построен':'Кратчайший пеший маршрут построен');toast('Маршрут готов. Проверьте его перед выходом.');
  }catch(e){console.error(e);toast(e.message+' Попробуйте ещё раз или выберите другие точки.');setStatus('Не удалось построить маршрут')}
