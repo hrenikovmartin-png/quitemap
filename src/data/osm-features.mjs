@@ -121,6 +121,7 @@ export function normalizeOSMFeatures(elements, isInside) {
       lon: center.lon,
       name: String(element.tags?.name || classification.label).slice(0, 120),
       tags: { ...(element.tags || {}) },
+      geometry: Array.isArray(element.geometry) ? element.geometry.filter(point => validPoint(Number(point?.lat), Number(point?.lon))).map(point => [Number(point.lon), Number(point.lat)]) : null,
       ...classification,
       source: 'OpenStreetMap'
     });
