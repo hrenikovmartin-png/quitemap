@@ -38,9 +38,9 @@ try {
   try {
     await page.waitForFunction(() => {
       const status = document.getElementById('mapStatus')?.textContent || '';
-      return status.includes('Точный контур Краснодарского края загружен') ||
-        status.includes('Не удалось загрузить точную границу Краснодарского края') ||
-        status.includes('Точная граница Краснодарского края не загружена');
+      return status.includes('Область QuietWalk: Краснодарский край + Адыгея') ||
+        status.includes('Не удалось загрузить границу области QuietWalk') ||
+        status.includes('Граница области QuietWalk не загружена');
     }, { timeout: 45000 });
   } catch (error) {
     throw new Error('Boundary startup timed out. Browser diagnostics: ' + errors.join(' | ') + ' · ' + error.message);
@@ -88,15 +88,20 @@ try {
   for (const key of ['serviceWorkerReady', 'manifestLoaded', 'offlineBoundaryCached', 'leafletLoaded', 'mapCreated', 'boundaryHttpOk', 'boundaryGzipOk', 'boundaryHasKrasnodarFeature', 'quietButton', 'fastButton', 'startNavigationButton', 'stopNavigationButton', 'routeHistoryTab', 'gpxImportButton']) {
     if (!result[key]) throw new Error('Browser check failed: ' + key);
   }
-  if (!result.status.includes('Точный контур Краснодарского края загружен')) {
+  if (!result.status.includes('Область QuietWalk: Краснодарский край + Адыгея')) {
     throw new Error('The application did not accept the Krasnodar Krai boundary: ' + result.status);
   }
   const validGpx = '<?xml version="1.0"?><gpx version="1.1" creator="QuietWalk" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg><trkpt lat="45.04" lon="38.976"/><trkpt lat="45.041" lon="38.977"/></trkseg></trk></gpx>';
   await page.setInputFiles('#gpxInput', { name: 'quietwalk-valid.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(validGpx) });
   await page.waitForFunction(() => document.getElementById('routeTitle')?.textContent.includes('Импортированный GPX-маршрут'), { timeout: 15000 });
+  const adygeaGpx = '<?xml version="1.0"?><gpx version="1.1" creator="QuietWalk" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg><trkpt lat="44.609" lon="40.1"/><trkpt lat="44.61" lon="40.11"/></trkseg></trk></gpx>';
+  await page.setInputFiles('#gpxInput', { name: 'quietwalk-adygea.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(adygeaGpx) });
+  await page.waitForFunction(() => document.getElementById('routeTitle')?.textContent.includes('Импортированный GPX-маршрут'), { timeout: 15000 });
+  if (!(await page.locator('#toast').textContent()).includes('области QuietWalk')) throw new Error('Adygea route was not accepted by the QuietWalk service area');
+  console.log('PASS: GPX route inside Adygea is accepted.');
   const outsideGpx = '<?xml version="1.0"?><gpx version="1.1" creator="QuietWalk" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg><trkpt lat="41" lon="29"/><trkpt lat="41.001" lon="29.001"/></trkseg></trk></gpx>';
   await page.setInputFiles('#gpxInput', { name: 'quietwalk-outside.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(outsideGpx) });
-  await page.waitForFunction(() => document.getElementById('toast')?.textContent.includes('внутри Краснодарского края'), { timeout: 10000 });
+  await page.waitForFunction(() => document.getElementById('toast')?.textContent.includes('внутри области QuietWalk'), { timeout: 10000 });
   console.log('PASS: GPX import accepts an in-region route and rejects outside coordinates.');
 
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 45000 });
@@ -106,12 +111,12 @@ try {
     await page.reload({ waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForFunction(() => {
       const status = document.getElementById('mapStatus')?.textContent || '';
-      return status.includes('Точный контур Краснодарского края загружен');
+      return status.includes('Область QuietWalk: Краснодарский край + Адыгея');
     }, { timeout: 45000 });
     const offlineResult = await page.evaluate(() => ({
       leafletLoaded: !!window.L,
       mapCreated: !!document.querySelector('#map.leaflet-container'),
-      boundaryLoaded: (document.getElementById('mapStatus')?.textContent || '').includes('Точный контур Краснодарского края загружен')
+      boundaryLoaded: (document.getElementById('mapStatus')?.textContent || '').includes('Область QuietWalk: Краснодарский край + Адыгея')
     }));
     if (!offlineResult.leafletLoaded || !offlineResult.mapCreated || !offlineResult.boundaryLoaded) {
       throw new Error('Offline shell did not reopen correctly: ' + JSON.stringify(offlineResult));
@@ -125,7 +130,7 @@ try {
   mobilePage.on('pageerror', error => errors.push('mobile pageerror: ' + error.message));
   const mobileResponse = await mobilePage.goto('http://127.0.0.1:4173/index.html', { waitUntil: 'domcontentloaded', timeout: 45000 });
   if (!mobileResponse?.ok()) throw new Error('Mobile page did not load successfully');
-  await mobilePage.waitForFunction(() => (document.getElementById('mapStatus')?.textContent || '').includes('Точный контур Краснодарского края загружен'), { timeout: 45000 });
+  await mobilePage.waitForFunction(() => (document.getElementById('mapStatus')?.textContent || '').includes('Область QuietWalk: Краснодарский край + Адыгея'), { timeout: 45000 });
   const mobileLayout = await mobilePage.evaluate(() => ({
     mapHeight: document.querySelector('.mapwrap')?.getBoundingClientRect().height || 0,
     viewportWidth: window.innerWidth,
