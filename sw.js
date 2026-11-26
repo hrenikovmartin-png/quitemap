@@ -1,13 +1,11 @@
 const CACHE_PREFIX='quietwalk-shell-';
-const CACHE_NAME=CACHE_PREFIX+'v1';
+const CACHE_NAME=CACHE_PREFIX+'v2';
 const BASE=self.registration.scope;
 const SHELL=[
   new URL('index.html',BASE).href,
   new URL('krasnodar-krai.geojson.gz.b64',BASE).href,
   new URL('manifest.webmanifest',BASE).href,
-  new URL('quietwalk.svg',BASE).href,
-  'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js',
-  'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'
+  new URL('quietwalk.svg',BASE).href
 ];
 
 self.addEventListener('install',event=>{
@@ -38,6 +36,25 @@ self.addEventListener('fetch',event=>{
   const sameOrigin=url.origin===self.location.origin;
   const libraryCdn=['cdn.jsdelivr.net','unpkg.com','cdnjs.cloudflare.com'].includes(url.hostname);
   if(!sameOrigin&&!libraryCdn)return;
+  // CDN libraries use network-first: refresh stale versions when online,
+  // but retain the last known-good response for offline launches.
+  if(libraryCdn){
+    event.respondWith((async()=>{
+      try{
+        const response=await fetch(request);
+        if(response.ok||response.type==='opaque'){
+          const cache=await caches.open(CACHE_NAME);
+          await cache.put(request,response.clone());
+        }
+        return response;
+      }catch(error){
+        const cached=await caches.match(request);
+        if(cached)return cached;
+        return new Response('',{status:503,statusText:'Offline'});
+      }
+    })());
+    return;
+  }
   if(sameOrigin&&request.mode==='navigate'){
     event.respondWith((async()=>{
       try{
