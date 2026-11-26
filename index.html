@@ -572,10 +572,13 @@ function addPlaceMarker(p,layer){L.marker([p.lat,p.lon]).addTo(layer||map).bindP
 window.qwFavorite=id=>{const p=places.find(x=>String(x.id)===String(id));if(!p)return;const exists=favorites.some(f=>String(typeof f==='object'?f.id:f)===String(id));favorites=exists?favorites.filter(f=>String(typeof f==='object'?f.id:f)!==String(id)):[...favorites,{id:p.id,name:p.name,lat:p.lat,lon:p.lon,type:p.type}];store.set('favorites',favorites);renderList();toast(exists?'Удалено из избранного':'Добавлено в избранное')};
 async function requestOverpass(query,timeout=18000){
  const hosts=['https://ovp.dresel.systems/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter','https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter'];
+ const deadline=Date.now()+Math.max(1000,Math.min(60000,Number(timeout)||18000));
  let lastError='Сервисы Overpass не ответили';
  for(const host of hosts){
+  const remaining=deadline-Date.now();
+  if(remaining<=0)break;
   try{
-   const response=await fetch(host,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','Accept':'application/json'},body:new URLSearchParams({data:query}).toString(),signal:AbortSignal.timeout(timeout),cache:'no-store'});
+   const response=await fetch(host,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','Accept':'application/json'},body:new URLSearchParams({data:query}).toString(),signal:AbortSignal.timeout(Math.min(9000,remaining)),cache:'no-store'});
    if(!response.ok){lastError='HTTP '+response.status+' от '+new URL(host).hostname;continue}
    const data=await response.json();
    if(data&&Array.isArray(data.elements))return data;
