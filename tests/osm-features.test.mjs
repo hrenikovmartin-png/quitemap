@@ -12,6 +12,8 @@ test('Overpass query includes green spaces and pedestrian infrastructure', () =>
   assert.match(query, /maxspeed/);
   assert.match(query, /route.*foot\\|hiking/);
   assert.match(query, /44,37,46,40/);
+  assert.match(query, /out geom tags/);
+  assert.match(query, /maxsize:33554432/);
 });
 
 test('Overpass query rejects malformed or inverted bounds and clamps timeout', () => {
@@ -112,4 +114,14 @@ test('route-corridor query requests both quiet and noise evidence with geometry'
 
 test('route-corridor query rejects invalid bounds', () => {
   assert.throws(() => buildOverpassRouteQuery({ south: 45, west: 40, north: 44, east: 39 }), /bounding box/);
+});
+
+
+test('OSM way geometry is retained for map detail rendering', () => {
+  const features = normalizeOSMFeatures([
+    { type: 'way', id: 31, center: { lat: 45, lon: 39 }, geometry: [
+      { lat: 45, lon: 39 }, { lat: 45.001, lon: 39.001 }, { lat: 45, lon: 39 }
+    ], tags: { leisure: 'park' } }
+  ], inside);
+  assert.deepEqual(features[0].geometry, [[39, 45], [39.001, 45.001], [39, 45]]);
 });
