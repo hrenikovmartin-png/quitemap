@@ -125,3 +125,20 @@ test('OSM way geometry is retained for map detail rendering', () => {
   ], inside);
   assert.deepEqual(features[0].geometry, [[39, 45], [39.001, 45.001], [39, 45]]);
 });
+
+test('route-corridor query includes higher-speed and multilane roads across the region', () => {
+  const query = buildOverpassRouteQuery({ south: 44, west: 37, north: 46, east: 40 });
+  assert.match(query, /lanes.*3-9/);
+  assert.match(query, /maxspeed.*40\|50\|60\|70/);
+});
+
+test('high-speed and multilane roads are classified as potential noise regardless of street name', () => {
+  const features = normalizeOSMFeatures([
+    { type: 'way', id: 101, center: { lat: 45, lon: 39 }, tags: { highway: 'residential', maxspeed: '70', name: 'Любая улица' } },
+    { type: 'way', id: 102, center: { lat: 45, lon: 39 }, tags: { highway: 'unclassified', lanes: '4', maxspeed: '50' } },
+    { type: 'way', id: 103, center: { lat: 45, lon: 39 }, tags: { highway: 'residential', maxspeed: '30' } }
+  ], inside);
+  assert.equal(features.length, 2);
+  assert.ok(features.every(feature => feature.kind === 'noise' && feature.category === 'high-traffic-road'));
+  assert.ok(features.every(feature => feature.confidence === 'low'));
+});
