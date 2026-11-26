@@ -98,7 +98,7 @@ html{scroll-behavior:smooth}body{-webkit-font-smoothing:antialiased;line-height:
  <div class="tabs"><button class="tab active" data-tab="places">Места</button><button class="tab" data-tab="favorites">Избранное</button><button class="tab" data-tab="reports">Шумовые отметки</button><button class="tab" data-tab="history">История</button></div><div class="list" id="listArea"><div class="empty">Загрузка карты мест…</div></div>
  <footer class="foot">Данные карты © OpenStreetMap contributors. Контур края: geoBoundaries (ODbL 1.0). QuietWalk MAX · сборка 25.11.2026. Независимый проект. Маршруты и оценки носят ориентировочный характер; проверяйте дорожные условия на месте.</footer>
 </aside>
-<main class="mapwrap"><div id="map"></div><div class="maptop"><div class="mapbadge">QuietWalk · <span id="mapStatus" role="status" aria-live="polite">Карта готова к прогулке</span></div><div class="maptools"><button id="showPlacesBtn">Места рядом</button><button id="locateMapBtn">◎</button></div></div><div class="legend"><div><span class="dot" style="background:#e0457f"></span>Тихий маршрут (эвристика)</div><div><span class="dot" style="background:#e0524d"></span>Отмеченный шум</div><div><span class="dot" style="background:#397bc7"></span>Пеший маршрут</div></div><div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div></main>
+<main class="mapwrap"><div id="map"></div><div class="maptop"><div class="mapbadge">QuietWalk · <span id="mapStatus" role="status" aria-live="polite">Карта готова к прогулке</span></div><div class="maptools"><button id="showPlacesBtn">Места рядом</button><button id="locateMapBtn">◎</button></div></div><div class="legend"><div><span class="dot" style="background:#e0457f"></span>Тихий маршрут (эвристика)</div><div><span class="dot" style="background:#e0524d"></span>Отмеченный шум</div><div><span class="dot" style="background:#397bc7"></span>Пеший маршрут</div><div><span class="dot" style="background:#65b985"></span>Парки и зелёные зоны</div><div><span class="dot" style="background:#3989b8"></span>Пешеходные дорожки</div></div><div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div></main>
 </div>
 <div class="voice-prompt" id="voicePrompt"><strong>Включить голосовое сопровождение?</strong><p id="voicePromptText">Нажмите пробел, чтобы включить озвучку. На телефоне нажмите по центру.</p><button id="enableVoiceBtn" type="button">Включить озвучку</button></div>
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" onerror="this.onerror=null;this.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';this.onerror=()=>{this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js'}"></script>
@@ -649,14 +649,14 @@ async function loadPlaces(){
    east:Math.min(KRAI_BOUNDS.east,center.lng+0.06)
   };
   const cacheKey=[Math.round(center.lat*50),Math.round(center.lng*50)].join(':');
-  const cached=store.get('osmPlacesCache',null);
+  const cached=store.get('osmPlacesGeometryCacheV1',null);
   let normalized=null;
   if(cached&&cached.key===cacheKey&&cached.expiresAt>Date.now()&&Array.isArray(cached.features)){
    normalized=cached.features.filter(feature=>inKrasnodarKrai(feature.lat,feature.lon));
   }else{
    const data=await requestOverpass(buildOverpassPlacesQuery(bounds),16000);
    normalized=normalizeOSMFeatures(data.elements,inKrasnodarKrai);
-   store.set('osmPlacesCache',{key:cacheKey,expiresAt:Date.now()+6*60*60*1000,features:normalized.slice(0,300)});
+   store.set('osmPlacesGeometryCacheV1',{key:cacheKey,expiresAt:Date.now()+6*60*60*1000,features:normalized.slice(0,300)});
   }
   const split=splitOSMFeatures(normalized);
   quietFeatures=split.quietFeatures;
