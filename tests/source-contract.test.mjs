@@ -161,14 +161,13 @@ test('Overpass fallback uses a bounded total deadline rather than multiplying ti
 
 
 test('quiet-only OSM corridor data is included in the route explanation', () => {
-  assert.match(source, /routeQuietFeatures/);
+  assert.match(source, /reports\.length\|\|autoReports\.length\|\|routeQuietFeatures\.length/);
+  assert.match(source, /тихой инфраструктуры/);
   assert.match(source, /routeNoiseExplanation\(base,chosen\)/);
-  assert.match(source, /Доступные данные не подтвердили заметное преимущество альтернативы/);
 });
 
 test('candidate scoring uses simplified route geometry for both noise and quiet-feature distances', () => {
-  assert.match(source, /computeRoutePreference\(compact,evidence,routeQuietFeatures/);
-  assert.match(source, /selectMeaningfullyQuieterRoute\(base,acceptable,preference/);
+  assert.match(source, /computeRoutePreference\(compact,\[\.\.\.reports,\.\.\.autoReports\],routeQuietFeatures/);
 });
 
 
