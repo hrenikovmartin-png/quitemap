@@ -48,7 +48,7 @@ try {
   });
   await page.route('https://api.heigit.org/openrouteservice/**', async route => {
     if (forceOrsFailure) {
-      await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'mock ORS unavailable' }) });
+      await route.fulfill({ status: 503, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ error: 'mock ORS unavailable' }) });
       return;
     }
     const body = JSON.parse(route.request().postData() || '{}');
@@ -59,7 +59,7 @@ try {
     const mid = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2 + 0.0024];
     const alternative = { type: 'Feature', geometry: { type: 'LineString', coordinates: [start, mid, end] }, properties: { summary: { distance: 1570, duration: 1050 }, segments: [] } };
     const waypoint = { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: { summary: { distance: 1650, duration: 1100 }, segments: [] } };
-    await route.fulfill({ status: 200, contentType: 'application/geo+json', body: JSON.stringify({ type: 'FeatureCollection', features: coords.length === 2 ? [base, alternative] : [waypoint] }) });
+    await route.fulfill({ status: 200, contentType: 'application/geo+json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ type: 'FeatureCollection', features: coords.length === 2 ? [base, alternative] : [waypoint] }) });
   });
   const response = await page.goto('http://127.0.0.1:4173/index.html', { waitUntil: 'domcontentloaded', timeout: 45000 });
   if (!response?.ok()) throw new Error('index.html did not load successfully');
@@ -130,10 +130,10 @@ try {
     const base = { distance: 1500, duration: 1000, geometry: { type: 'LineString', coordinates: [start, end] }, legs: [] };
     const mid = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2 + 0.0024];
     const alternative = { distance: 1570, duration: 1050, geometry: { type: 'LineString', coordinates: [start, mid, end] }, legs: [] };
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ code: 'Ok', routes: url.searchParams.get('alternatives') === 'true' ? [base, alternative] : [base] }) });
+    await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ code: 'Ok', routes: url.searchParams.get('alternatives') === 'true' ? [base, alternative] : [base] }) });
   });
   await page.route('https://ovp.dresel.systems/api/interpreter', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ elements: [] }) });
+    await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ elements: [] }) });
   });
   await page.fill('#searchInput', 'TEST_START');
   await page.click('#searchBtn');
