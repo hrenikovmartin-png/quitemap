@@ -55,10 +55,6 @@ try {
     const waypoint = { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: { summary: { distance: 1650, duration: 1100 }, segments: [] } };
     await route.fulfill({ status: 200, contentType: 'application/geo+json', body: JSON.stringify({ type: 'FeatureCollection', features: coords.length === 2 ? [base, alternative] : [waypoint] }) });
   });
-  await page.route('https://ovp.dresel.systems/api/interpreter', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ elements: [] }) });
-  });
-
   const response = await page.goto('http://127.0.0.1:4173/index.html', { waitUntil: 'domcontentloaded', timeout: 45000 });
   if (!response?.ok()) throw new Error('index.html did not load successfully');
 
@@ -118,6 +114,11 @@ try {
   if (!result.status.includes('Область QuietWalk: Краснодарский край + Адыгея')) {
     throw new Error('The application did not accept the Krasnodar Krai boundary: ' + result.status);
   }
+  // Mock Overpass only after the initial boundary/shell checks; startup place loading
+  // is intentionally left untouched so this integration test cannot mask boundary state.
+  await page.route('https://ovp.dresel.systems/api/interpreter', async route => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ elements: [] }) });
+  });
   await page.fill('#searchInput', 'TEST_START');
   await page.click('#searchBtn');
   await page.waitForSelector('.leaflet-popup', { timeout: 15000 });
