@@ -110,13 +110,14 @@ try {
   try {
     await page.reload({ waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForFunction(() => {
-      const status = document.getElementById('mapStatus')?.textContent || '';
-      return status.includes('Область QuietWalk: Краснодарский край + Адыгея');
+      const map = document.querySelector('#map.leaflet-container');
+      const boundaryPaths = document.querySelectorAll('#map .leaflet-overlay-pane svg path').length;
+      return !!map && boundaryPaths > 0;
     }, { timeout: 45000 });
     const offlineResult = await page.evaluate(() => ({
       leafletLoaded: !!window.L,
       mapCreated: !!document.querySelector('#map.leaflet-container'),
-      boundaryLoaded: (document.getElementById('mapStatus')?.textContent || '').includes('Область QuietWalk: Краснодарский край + Адыгея')
+      boundaryLoaded: document.querySelectorAll('#map .leaflet-overlay-pane svg path').length > 0
     }));
     if (!offlineResult.leafletLoaded || !offlineResult.mapCreated || !offlineResult.boundaryLoaded) {
       throw new Error('Offline shell did not reopen correctly: ' + JSON.stringify(offlineResult));

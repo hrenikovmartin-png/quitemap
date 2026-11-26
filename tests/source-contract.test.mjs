@@ -102,13 +102,18 @@ test('the map remains fully tiled outside the highlighted QuietWalk service area
 });
 
 
-test('Stage 4.2 loads evidence-based OSM green and pedestrian features only after boundary readiness', () => {
-  assert.match(source, /from '\.\/src\/data\/osm-features\.mjs'/);
+test('Stage 4.3.2 accumulates OSM place evidence across bounded regional cells', () => {
+  assert.match(source, /from '\.\/src\/data\/place-cache\.mjs'/);
   assert.match(source, /async function loadPlaces\(\)\{\s*if\(!kraiGeometry\)return;/);
-  assert.match(source, /buildOverpassPlacesQuery\(bounds\)/);
+  assert.match(source, /getPlaceCell\(center\.lat,center\.lng,KRAI_BOUNDS\)/);
+  assert.match(source, /buildOverpassPlacesQuery\(cell\.bounds\)/);
   assert.match(source, /normalizeOSMFeatures\(data\.elements,inKrasnodarKrai\)/);
-  assert.match(source, /expiresAt:Date\.now\(\)\+6\*60\*60\*1000/);
+  assert.match(source, /mergePlaceCells\(cache,cell\.key,normalized\.slice\(0,180\)\)/);
+  assert.match(source, /readPlaceCells\(nextCache\)/);
+  assert.match(source, /osmPlacesRegionalCacheV1/);
+  assert.match(source, /slice\(0,1200\)/);
 });
+
 
 test('automatic noise features share the OSM classifier and preserve road/rail metadata', () => {
   assert.match(source, /const split=splitOSMFeatures\(normalized\)/);
