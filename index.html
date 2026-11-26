@@ -105,7 +105,7 @@ html{scroll-behavior:smooth}body{-webkit-font-smoothing:antialiased;line-height:
 <script>try{var t=localStorage.getItem('qw_theme');if(t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches)document.body.classList.add('dark')}catch(e){}</script>
 <script type="module">
 import { haversine, bearingBetween, nearestRouteSegment } from './src/navigation/geometry.mjs';
-import { computeRouteNoisePenalty, computeQuietnessScore } from './src/routing/quiet-score.mjs';
+import { computeRouteNoisePenalty, computeQuietnessScore, computeRouteQuietFeatureBonus, computeRoutePreference } from './src/routing/quiet-score.mjs';
 import { buildOverpassPlacesQuery, buildOverpassRouteQuery, normalizeOSMFeatures, splitOSMFeatures } from './src/data/osm-features.mjs';
 (()=>{'use strict';
 if(!window.L){
@@ -254,14 +254,21 @@ function minDistanceToReports(coords){if(!reports.length)return 99999;let min=99
 function routeNoisePenalty(route){return computeRouteNoisePenalty(route.geometry.coordinates,[...reports,...autoReports],minDistanceToReportsForOne,Number($('sensitivity').value))}
 function routeNoiseExplanation(base,chosen){
  const sources=[...reports,...autoReports];
- if(!sources.length)return 'Шумовые данные отсутствуют: сравнение выполнено без подтверждённых объектов OSM.';
  const differences=sources.map(source=>({reason:source.reason||'шумовой объект',before:minDistanceToReportsForOne(base.geometry.coordinates,source),after:minDistanceToReportsForOne(chosen.geometry.coordinates,source)}))
   .filter(item=>Number.isFinite(item.before)&&Number.isFinite(item.after)&&item.before<380&&item.after-item.before>45)
   .sort((a,b)=>(b.after-b.before)-(a.after-a.before)).slice(0,3);
- if(differences.length)return 'Почему этот вариант может быть тише: он дальше от '+differences.map(item=>item.reason.toLowerCase()).join(', ')+', найденных на OpenStreetMap. Это относительная оценка по карте, не измерение дБ.';
+ const quietEvidence=routeQuietFeatures.map(feature=>({label:feature.label||'тихая инфраструктура',before:minDistanceToReportsForOne(base.geometry.coordinates,feature),after:minDistanceToReportsForOne(chosen.geometry.coordinates,feature)}))
+  .filter(item=>Number.isFinite(item.before)&&Number.isFinite(item.after)&&item.after<180&&item.before-item.after>20)
+  .sort((a,b)=>(a.after-b.after)-(b.after-b.after)).slice(0,2);
+ const parts=[];
+ if(differences.length)parts.push('дальше от '+differences.map(item=>item.reason.toLowerCase()).join(', '));
+ const uniqueQuiet=[...new Set(quietEvidence.map(item=>item.label.toLowerCase()))];
+ if(uniqueQuiet.length)parts.push('ближе к '+uniqueQuiet.join(' и '));
+ if(parts.length)return 'Почему этот вариант может быть тише: он '+parts.join('; ')+'. Данные OpenStreetMap и расчётная модель, не измерение дБ.';
+ if(!sources.length&&!routeQuietFeatures.length)return 'Шумовые и тихие объекты в коридоре маршрута не найдены. Сравнение ограничено длиной и временем.';
  const reduction=routeNoisePenalty(base)-routeNoisePenalty(chosen);
- if(reduction>1)return 'Модельная экспозиция к отмеченным источникам ниже на '+Math.round(reduction)+' условных единиц. Это не децибелы.';
- return 'Заметного преимущества по найденным шумовым объектам не обнаружено; выбран компромисс по длине и времени. Оценка не является измерением дБ.';
+ if(reduction>1)return 'Модельная экспозиция к потенциальным источникам ниже на '+Math.round(reduction)+' условных единиц. Это не децибелы.';
+ return 'Заметного преимущества по доступным данным OSM не обнаружено; выбран компромисс по длине и времени. Оценка не является измерением дБ.';
 }
 
 function simplifyNoiseGeometry(coords,maxPoints=180,toleranceMeters=8){
@@ -339,9 +346,13 @@ function minDistanceToReportsForOne(coords,r){
 
 function qwScore(coords){
  const rs=[...reports,...autoReports];let el=document.getElementById('qwScore');if(!el){el=document.createElement('div');el.id='qwScore';$('routeDesc').after(el)}
- if(!rs.length){el.innerHTML='<div class="qs-t">Индекс тишины: нет данных. Нажмите «Найти шумовые зоны автоматически».</div>';return}
- const idx=computeQuietnessScore(coords,rs,minDistanceToReportsForOne);
- el.innerHTML='<div class="qs-t">Индекс тишины <b>'+idx+'</b>/100 <span>оценка по карте, не дБ</span></div><div class="qs-bar"><i style="width:'+idx+'%"></i></div>'
+ const idx=rs.length?computeQuietnessScore(coords,rs,minDistanceToReportsForOne):null;
+ const quietBonus=routeQuietFeatures.length?computeRouteQuietFeatureBonus(coords,routeQuietFeatures,minDistanceToReportsForOne):null;
+ if(idx===null&&quietBonus===null){el.innerHTML='<div class="qs-t">Индекс тишины: недостаточно данных. Попробуйте загрузить объекты OSM для этого маршрута.</div>';return}
+ const rows=[];
+ if(idx!==null)rows.push('<div class="qs-t">Оценка по шумовым объектам <b>'+idx+'</b>/100</div><div class="qs-bar"><i style="width:'+idx+'%"></i></div>');
+ if(quietBonus!==null)rows.push('<div class="qs-t">Поддержка тихой инфраструктурой <b>'+quietBonus+'</b>/100</div><div class="qs-bar"><i style="width:'+quietBonus+'%"></i></div>');
+ el.innerHTML=rows.join('')+'<div class="qs-t"><span>Обе оценки модельные, по OpenStreetMap; не являются измерением децибел.</span></div>';
 }
 async function buildRoute(quiet,guard=null){
  if(points.length===2&&!points.every(p=>inKrasnodarKrai(p.lat,p.lng))){toast('Обе точки должны быть в области QuietWalk');return}
@@ -351,6 +362,16 @@ async function buildRoute(quiet,guard=null){
   const a=points[0],b=points[1],start=[a.lng,a.lat],finish=[b.lng,b.lat];
   let chosen,base,detour=0;
   base=await getFootRoute([start,finish]);
+  if(quiet){
+   setStatus('Анализируем тихие улицы, зелёные зоны и потенциальный шум…');
+   try{
+    const context=await loadRouteContext(a,b);
+    if(!context.quietFeatures.length&&!context.noiseSources.length)toast('В коридоре маршрута не найдены подходящие объекты OSM; используем доступные отметки и эвристику.');
+   }catch(error){
+    routeQuietFeatures=quietFeatures;
+    toast('Данные OSM для этого коридора недоступны. Маршрут будет построен по имеющимся отметкам и эвристике.');
+   }
+  }
   if(!quiet){chosen=base;}
   else{
    const candidates=[base];
@@ -370,13 +391,14 @@ async function buildRoute(quiet,guard=null){
    const high=Number($('sensitivity').value)===3;const maxDetour=directM<1500?(high?1.3:1.18):(high?1.65:1.45);const maxExtra=high?600:400;
    const noSpike=r=>r.geometry.coordinates.every(p=>haversine(p,start)+haversine(p,finish)<=directM*1.5+120);
    const acceptable=candidates.filter(r=>r.distance<=base.distance*maxDetour&&r.distance-base.distance<=maxExtra&&r.distance>=base.distance*1.015&&noSpike(r));
-   if(autoReports.length===0&&reports.length===0)toast('Шумовые данные не загружены: тихий вариант будет эвристическим. Нажмите «Найти шумовые зоны автоматически» для более точного выбора.');
+   if(autoReports.length===0&&reports.length===0&&routeQuietFeatures.length===0)toast('Нет данных о шумных объектах и тихой инфраструктуре: используется эвристический обход.');
    const pool=acceptable.length?acceptable:[base];if(!acceptable.length)toast('Тихого обхода без большого крюка не нашлось, оставлен кратчайший путь');
    // Сначала избегаем пользовательских шумовых отметок. При равной оценке предпочитаем
    // умеренный обход, поэтому тихий режим отличается от кратчайшего даже без отметок.
+   const preference=route=>computeRoutePreference(route.geometry.coordinates,[...reports,...autoReports],routeQuietFeatures,minDistanceToReportsForOne,Number($('sensitivity').value))?.score??routeNoisePenalty(route);
    chosen=pool.sort((x,y)=>{
-    const noiseDiff=routeNoisePenalty(x)-routeNoisePenalty(y);
-    if(Math.abs(noiseDiff)>1)return noiseDiff;
+    const scoreDiff=preference(x)-preference(y);
+    if(Math.abs(scoreDiff)>1)return scoreDiff;
     return x.distance-y.distance;
    })[0];
    detour=Math.max(0,(chosen.distance/base.distance-1)*100);
