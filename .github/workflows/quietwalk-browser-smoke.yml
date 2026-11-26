@@ -1,4 +1,4 @@
-name: QuietWalk Stage 3 checks
+name: QuietWalk Stage 4 map checks
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
       - main
       - stage-2-map-guard
       - quietwalk-stage-3
+      - quietwalk-stage-4-map-tiles
   pull_request:
     branches:
       - main
