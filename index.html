@@ -417,11 +417,12 @@ async function buildRoute(quiet,guard=null){
   if(!quiet){chosen=base;}
   else{
    const candidates=[base,...(Array.isArray(base.alternatives)?base.alternatives:[])];
+   const directM=haversine(start,finish);
    // Сначала используем альтернативы, которые маршрутизатор умеет возвращать штатно.
    // Искусственные промежуточные точки — только резерв, если провайдер не дал ни одной альтернативы.
    if(candidates.length===1){
     const dx=b.lng-a.lng,dy=b.lat-a.lat;
-    const directM=haversine(start,finish),cosL=Math.cos((a.lat+b.lat)/2*Math.PI/180),mx=dx*cosL*111320,my=dy*111320,L2=Math.hypot(mx,my)||1;
+    const cosL=Math.cos((a.lat+b.lat)/2*Math.PI/180),mx=dx*cosL*111320,my=dy*111320,L2=Math.hypot(mx,my)||1;
     const offsets=[0.10,0.20].map(k=>Math.max(60,Math.min(600,directM*k)));
     for(const off of offsets){
      for(const sign of [-1,1]){
