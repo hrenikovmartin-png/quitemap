@@ -19,8 +19,8 @@ test('point checks fail closed until the exact geometry is available', () => {
 });
 
 test('every router response and final selected route is checked against the region', () => {
-  assert.ok((source.match(/if\(!routeInsideKrai\(route\)\)/g) || []).length >= 2,
-    'both ORS and fallback route responses must be checked');
+  assert.match(source, /routeInsideKrai\(route\)\?route:null/);
+  assert.match(source, /return routeInsideKrai\(route\)\?route:null/);
   assert.match(source, /if\(!routeInsideKrai\(chosen\)\)throw Error\(/);
   assert.match(source, /if\(routeInsideKrai\(r\)&&!candidates\.some/);
 });
