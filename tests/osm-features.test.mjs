@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildOverpassPlacesQuery, normalizeOSMFeatures, splitOSMFeatures } from '../src/data/osm-features.mjs';
+import { buildOverpassPlacesQuery, buildOverpassRouteQuery, normalizeOSMFeatures, splitOSMFeatures } from '../src/data/osm-features.mjs';
 
 const inside = (lat, lon) => lat >= 43 && lat <= 48 && lon >= 36 && lon <= 42;
 
@@ -97,4 +97,19 @@ test('quiet and noise features can be separated without losing source metadata',
   const split = splitOSMFeatures(features);
   assert.equal(split.quietFeatures.length, 1);
   assert.equal(split.noiseFeatures.length, 1);
+});
+
+
+test('route-corridor query requests both quiet and noise evidence with geometry', () => {
+  const query = buildOverpassRouteQuery({ south: 44, west: 37, north: 46, east: 40 });
+  assert.match(query, /leisure.*park/);
+  assert.match(query, /highway.*footway/);
+  assert.match(query, /highway.*motorway/);
+  assert.match(query, /railway/);
+  assert.match(query, /industrial/);
+  assert.match(query, /out geom tags/);
+});
+
+test('route-corridor query rejects invalid bounds', () => {
+  assert.throws(() => buildOverpassRouteQuery({ south: 45, west: 40, north: 44, east: 39 }), /bounding box/);
 });

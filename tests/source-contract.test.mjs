@@ -48,7 +48,7 @@ test('rerouting is protected by a navigation session token', () => {
 });
 
 test('quietness score is clearly described as an estimate, not decibels', () => {
-  assert.match(source, /оценка по карте, не дБ/);
+  assert.match(source, /Обе оценки модельные, по OpenStreetMap; не являются измерением децибел/);
 });
 
 test('GPS permission denial and synchronous browser errors cleanly stop navigation', () => {
@@ -115,4 +115,52 @@ test('automatic noise features share the OSM classifier and preserve road/rail m
   assert.match(source, /split\.noiseFeatures\.map\(feature/);
   assert.match(source, /highway:feature\.tags\?\.highway/);
   assert.match(source, /railway:feature\.tags\?\.railway/);
+});
+
+
+test('quiet route loads corridor OSM evidence and scores both noise and quiet infrastructure', () => {
+  assert.match(source, /buildOverpassRouteQuery/);
+  assert.match(source, /async function loadRouteContext\(start,end\)/);
+  assert.match(source, /normalizeOSMFeatures\(data\.elements,inKrasnodarKrai\)/);
+  assert.match(source, /computeRoutePreference\(/);
+  assert.match(source, /computeRouteQuietFeatureBonus\(/);
+  assert.match(source, /Поддержка тихой инфраструктурой/);
+  assert.match(source, /Данные OpenStreetMap и расчётная модель, не измерение дБ/);
+});
+
+test('route-context cache is bounded and quiet-feature geometries outside the region are discarded', () => {
+  assert.match(source, /expiresAt:Date\.now\(\)\+2\*60\*60\*1000/);
+  assert.match(source, /features:normalized\.slice\(0,240\)/);
+  assert.match(source, /feature\.geometry\.every\(point=>inKrasnodarKrai\(point\[1\],point\[0\]\)\)/);
+  assert.match(source, /routeQuietFeatures=split\.quietFeatures\.slice\(0,100\)/);
+  assert.match(source, /autoReports=split\.noiseFeatures\.slice\(0,140\)/);
+});
+
+test('all selected route candidates remain subject to the existing exact regional geometry guard', () => {
+  assert.match(source, /if\(!routeInsideKrai\(chosen\)\)throw Error\(/);
+  assert.match(source, /if\(routeInsideKrai\(r\)&&!candidates\.some/);
+});
+
+
+test('failed route-corridor lookup cannot reuse stale automatic noise features from another route', () => {
+  assert.match(source, /routeQuietFeatures=quietFeatures\.filter\(feature=>minDistanceToReportsForOne\(\[\[a\.lng,a\.lat\],\[b\.lng,b\.lat\]\],feature\)<500\)/);
+  assert.match(source, /autoReports=\[\];\s*toast\('Данные OSM для этого коридора недоступны/);
+});
+
+
+test('Overpass fallback uses a bounded total deadline rather than multiplying timeout by host count', () => {
+  assert.match(source, /const deadline=Date\.now\(\)\+Math\.max\(1000,Math\.min\(60000,Number\(timeout\)\|\|18000\)\)/);
+  assert.match(source, /const remaining=deadline-Date\.now\(\)/);
+  assert.match(source, /AbortSignal\.timeout\(Math\.min\(9000,remaining\)\)/);
+});
+
+
+test('quiet-only OSM corridor data is included in the route explanation', () => {
+  assert.match(source, /reports\.length\|\|autoReports\.length\|\|routeQuietFeatures\.length/);
+  assert.match(source, /тихой инфраструктуры/);
+  assert.match(source, /routeNoiseExplanation\(base,chosen\)/);
+});
+
+test('candidate scoring uses simplified route geometry for both noise and quiet-feature distances', () => {
+  assert.match(source, /computeRoutePreference\(compact,\[\.\.\.reports,\.\.\.autoReports\],routeQuietFeatures/);
 });
