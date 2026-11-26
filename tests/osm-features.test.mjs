@@ -9,6 +9,8 @@ test('Overpass query includes green spaces and pedestrian infrastructure', () =>
   assert.match(query, /leisure.*park\|garden\|nature_reserve/);
   assert.match(query, /highway.*pedestrian\|footway\|path/);
   assert.match(query, /traffic_calming/);
+  assert.match(query, /maxspeed/);
+  assert.match(query, /route.*foot\\|hiking/);
   assert.match(query, /44,37,46,40/);
 });
 
@@ -67,6 +69,14 @@ test('duplicate OSM ids are deduplicated and invalid elements are ignored', () =
   ], inside);
   assert.equal(features.length, 1);
   assert.equal(features[0].name, 'Duplicate');
+});
+
+test('mapped foot and hiking relations are included as route evidence', () => {
+  const features = normalizeOSMFeatures([
+    { type: 'relation', id: 22, center: { lat: 45, lon: 39 }, tags: { route: 'hiking', name: 'Маршрут по парку' } }
+  ], inside);
+  assert.equal(features.length, 1);
+  assert.equal(features[0].category, 'hiking-route');
 });
 
 test('speed limit and traffic calming are weak quietness evidence, not guarantees', () => {
