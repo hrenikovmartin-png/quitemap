@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { computeRouteNoisePenalty, computeQuietnessScore, compareRouteNoise } from '../src/routing/quiet-score.mjs';
+import { computeRouteNoisePenalty, computeQuietnessScore, compareRouteNoise, computeRouteQuietFeatureBonus, computeRoutePreference } from '../src/routing/quiet-score.mjs';
 
 const distance = (points, report) => report.distance;
 
@@ -56,4 +56,40 @@ test('route comparison explains which candidate has lower mapped exposure', () =
 test('invalid inputs fail safely', () => {
   assert.equal(computeRouteNoisePenalty([], [], distance), Infinity);
   assert.equal(computeQuietnessScore([[0, 0]], [{ distance: 0 }], distance), 30);
+});
+
+
+test('mapped green spaces and pedestrian ways provide a bounded quiet-feature bonus', () => {
+  const route = [[38.9, 45], [38.91, 45.01]];
+  const features = [
+    { category: 'green-space', distance: 0 },
+    { category: 'pedestrian-way', distance: 0 },
+    { category: 'pedestrian-way', distance: 0 }
+  ];
+  const bonus = computeRouteQuietFeatureBonus(route, features, distance);
+  assert.ok(bonus > 0 && bonus <= 100);
+  assert.equal(computeRouteQuietFeatureBonus(route, [], distance), 0);
+});
+
+test('ordinary residential streets do not receive a quiet-feature bonus without mapped evidence', () => {
+  const route = [[38.9, 45], [38.91, 45.01]];
+  const bonus = computeRouteQuietFeatureBonus(route, [{ category: 'residential', distance: 0 }], distance);
+  assert.equal(bonus, 0);
+});
+
+test('strict sensitivity increases the influence of mapped quiet features', () => {
+  const route = [[38.9, 45], [38.91, 45.01]];
+  const features = [{ category: 'green-space', distance: 200 }];
+  assert.ok(computeRouteQuietFeatureBonus(route, features, distance, 3) >
+    computeRouteQuietFeatureBonus(route, features, distance, 1));
+});
+
+test('route preference rewards mapped quiet features while retaining noise penalties', () => {
+  const route = [[38.9, 45], [38.91, 45.01]];
+  const quiet = [{ category: 'green-space', distance: 0 }];
+  const noisy = [{ distance: 0, weight: 1 }];
+  const withQuiet = computeRoutePreference(route, noisy, quiet, distance);
+  const withoutQuiet = computeRoutePreference(route, noisy, [], distance);
+  assert.ok(withQuiet.score < withoutQuiet.score);
+  assert.equal(withQuiet.noisePenalty, withoutQuiet.noisePenalty);
 });
