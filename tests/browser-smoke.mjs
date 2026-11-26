@@ -198,11 +198,16 @@ try {
   await page.waitForFunction(() => (document.getElementById('searchInput')?.value || '').includes('Краснодар'), { timeout: 15000 });
   await page.evaluate(() => window.qwUseSearch());
   await page.click('#quietBtn');
-  await page.waitForFunction(() => (document.getElementById('routeTitle')?.textContent || '').includes('Тихий маршрут'), { timeout: 30000 });
+  await page.waitForFunction(() => {
+    const status = document.getElementById('mapStatus')?.textContent || '';
+    const toast = document.getElementById('toast')?.textContent || '';
+    return status.includes('Тихий маршрут построен') || status.includes('Не удалось построить маршрут') || toast.includes('Не удалось построить пеший маршрут');
+  }, { timeout: 30000 });
   const fallbackResult = await page.evaluate(() => ({
     title: document.getElementById('routeTitle')?.textContent || '',
     status: document.getElementById('mapStatus')?.textContent || '',
-    distance: document.getElementById('distance')?.textContent || ''
+    distance: document.getElementById('distance')?.textContent || '',
+    toast: document.getElementById('toast')?.textContent || ''
   }));
   if (!fallbackResult.title.includes('Тихий маршрут') || !fallbackResult.status.includes('построен') || !fallbackResult.distance) {
     throw new Error('Quiet route OSRM fallback check failed: ' + JSON.stringify(fallbackResult));
