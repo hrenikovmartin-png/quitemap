@@ -34,3 +34,14 @@ test('rejects identical route object and non-finite scores', () => {
   assert.equal(selectMeaningfullyQuieterRoute(base, [base], score), null);
   assert.equal(selectMeaningfullyQuieterRoute(base, [alternative], () => ({ score: NaN, noisePenalty: 0, quietBonus: 0 })), null);
 });
+
+test('rejects a geometrically duplicate candidate even when its vertex count differs', () => {
+  const duplicate = { distance: 1050, geometry: { coordinates: [[0, 0], [0.005, 0], [0.01, 0]] }, id: 'duplicate' };
+  const meters = (a, b) => {
+    const dx = (a[0] - b[0]) * 111320 * Math.cos((a[1] + b[1]) * Math.PI / 360);
+    const dy = (a[1] - b[1]) * 110540;
+    return Math.hypot(dx, dy);
+  };
+  const result = selectMeaningfullyQuieterRoute(base, [duplicate], score, { distanceMeters: meters });
+  assert.equal(result, null);
+});
