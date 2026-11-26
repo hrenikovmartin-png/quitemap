@@ -106,7 +106,7 @@ html{scroll-behavior:smooth}body{-webkit-font-smoothing:antialiased;line-height:
 <script type="module">
 import { haversine, bearingBetween, nearestRouteSegment } from './src/navigation/geometry.mjs';
 import { computeRouteNoisePenalty, computeQuietnessScore, computeRouteQuietFeatureBonus, computeRoutePreference } from './src/routing/quiet-score.mjs';
-import { selectMeaningfullyQuieterRoute } from './src/routing/route-quality.mjs';
+import { selectMeaningfullyQuieterRoute, routeGeometrySimilarity } from './src/routing/route-quality.mjs';
 import { buildOverpassPlacesQuery, buildOverpassRouteQuery, normalizeOSMFeatures, splitOSMFeatures } from './src/data/osm-features.mjs';
 import { getPlaceCell, mergePlaceCells, readPlaceCells } from './src/data/place-cache.mjs';
 (()=>{'use strict';
@@ -399,7 +399,7 @@ async function buildRoute(quiet,guard=null){
    const evidence=[...reports,...autoReports];
    const hasEvidence=evidence.length>0||routeQuietFeatures.length>0;
    const preference=route=>{const compact=simplifyNoiseGeometry(route.geometry.coordinates,120,12);return computeRoutePreference(compact,evidence,routeQuietFeatures,(_,feature)=>minDistanceToReportsForOne(compact,feature),Number($('sensitivity').value))};
-   const selection=hasEvidence?selectMeaningfullyQuieterRoute(base,acceptable,preference,{minimumRelativeImprovement:0.12,minimumAbsoluteImprovement:2}):null;
+   const selection=hasEvidence?selectMeaningfullyQuieterRoute(base,acceptable,preference,{minimumRelativeImprovement:0.12,minimumAbsoluteImprovement:2,distanceMeters:haversine}):null;
    if(!hasEvidence)toast('Недостаточно данных OSM и отметок, чтобы подтвердить тихий вариант. Показан обычный пеший маршрут.');
    else if(!selection)toast('Не найден вариант с подтверждённым преимуществом по доступным данным. Показан обычный пеший маршрут.');
    chosen=selection?.route||base;
