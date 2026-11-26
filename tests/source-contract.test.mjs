@@ -177,3 +177,24 @@ test('quiet place map rendering draws detailed geometry only when every vertex i
   assert.match(source, /L\.polygon\(latlngs,style\):L\.polyline\(latlngs,style\)/);
   assert.match(source, /simplifyNoiseGeometry\(raw,180,7\)/);
 });
+
+
+test('quiet routing requests native ORS alternatives and preserves the base route fallback', () => {
+  assert.match(source, /alternative_routes:\{target_count:3,weight_factor:1\.4,share_factor:0\.6\}/);
+  assert.match(source, /const candidates=\[base,\.\.\.\(Array\.isArray\(base\.alternatives\)\?base\.alternatives:\[\]\)\]/);
+  assert.match(source, /if\(candidates\.length===1\)/);
+  assert.match(source, /attempts\.push\(baseBody\)/);
+});
+
+test('quiet-route labels only claim a quiet alternative when a different route was selected', () => {
+  assert.match(source, /quietSelected=!!\(quiet&&chosen!==base&&detour>=1\.5\)/);
+  assert.match(source, /lastRoute=\{quiet:quietSelected/);
+  assert.match(source, /routeTitle'\)\.textContent=quietSelected\?'Тихий маршрут'/);
+  assert.match(source, /Не найден подходящий альтернативный путь с преимуществом/);
+});
+
+test('route provider failures report both ORS and public fallback diagnostics without exposing API keys', () => {
+  assert.match(source, /Не удалось построить пеший маршрут\. Проверьте доступность сети и сервисов маршрутизации/);
+  assert.match(source, /fallbackError\.message/);
+  assert.doesNotMatch(source, /orsKey\s*\+|Authorization[^\n]*orsKey[^\n]*toast/);
+});
