@@ -304,7 +304,7 @@ async function loadAutomaticNoise(){
   const result=split.noiseFeatures.map(feature=>{
    const original=sourceById.get(feature.id);
    const geometry=Array.isArray(original?.geometry)?simplifyNoiseGeometry(original.geometry.map(point=>[+point.lon,+point.lat])):feature.geometry;
-   return {...feature,id:feature.osmId,reason:feature.label,geometry,automatic:true};
+   return {...feature,id:feature.osmId,reason:feature.label,highway:feature.tags?.highway||null,railway:feature.tags?.railway||null,geometry,automatic:true};
   });
   const unique=new Map();for(const item of result)unique.set(item.osmType+':'+item.osmId,item);
   const deduplicated=[...unique.values()];
@@ -542,7 +542,7 @@ const bad=rows.filter(r=>r.includes('Не работает')).length;out.innerHT
 window.qwDeleteReport=function(id){reports=reports.filter(r=>r.id!==id);store.set('reports',reports);try{map.closePopup()}catch(e){}drawReports();renderList();toast('Отметка удалена')};
 function clearReports(){if(!confirm('Удалить все ваши шумовые отметки на этом устройстве?'))return;reports=[];store.set('reports',reports);drawReports();renderList();toast('Ваши отметки удалены')}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function addPlaceMarker(p,layer){L.marker([p.lat,p.lon]).addTo(layer||map).bindPopup('<div class="popup-title">'+escapeHtml(p.name)+'</div><div style="font-size:12px">'+escapeHtml(p.type||'Место')+'</div><div class="popup-actions"><button onclick="window.qwFavorite('+JSON.stringify(p.id)+')">В избранное</button><button onclick="window.qwNoise('+p.lat+','+p.lon+')">Отметить шум</button></div>')}
+function addPlaceMarker(p,layer){L.marker([p.lat,p.lon]).addTo(layer||map).bindPopup('<div class="popup-title">'+escapeHtml(p.name)+'</div><div style="font-size:12px">'+escapeHtml(p.type||'Место')+'</div><div class="popup-actions"><button onclick="window.qwFavorite('+p.id+')">В избранное</button><button onclick="window.qwNoise('+p.lat+','+p.lon+')">Отметить шум</button></div>')}
 window.qwFavorite=id=>{const p=places.find(x=>String(x.id)===String(id));if(!p)return;const exists=favorites.some(f=>String(typeof f==='object'?f.id:f)===String(id));favorites=exists?favorites.filter(f=>String(typeof f==='object'?f.id:f)!==String(id)):[...favorites,{id:p.id,name:p.name,lat:p.lat,lon:p.lon,type:p.type}];store.set('favorites',favorites);renderList();toast(exists?'Удалено из избранного':'Добавлено в избранное')};
 async function requestOverpass(query,timeout=18000){
  const hosts=['https://ovp.dresel.systems/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter','https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter'];
@@ -559,6 +559,7 @@ async function requestOverpass(query,timeout=18000){
  throw Error(lastError);
 }
 async function loadPlaces(){
+ if(!kraiGeometry)return;
  // Зелёные зоны и пешеходная инфраструктура классифицируются по тегам OSM.
  // Точные координаты каждого объекта дополнительно проверяются по контуру региона.
  try{
@@ -569,7 +570,7 @@ async function loadPlaces(){
    north:Math.min(KRAI_BOUNDS.north,center.lat+0.05),
    east:Math.min(KRAI_BOUNDS.east,center.lng+0.06)
   };
-  const cacheKey=[Math.round(center.lat*10),Math.round(center.lng*10)].join(':');
+  const cacheKey=[Math.round(center.lat*50),Math.round(center.lng*50)].join(':');
   const cached=store.get('osmPlacesCache',null);
   let normalized=null;
   if(cached&&cached.key===cacheKey&&cached.expiresAt>Date.now()&&Array.isArray(cached.features)){
@@ -581,7 +582,7 @@ async function loadPlaces(){
   }
   const split=splitOSMFeatures(normalized);
   quietFeatures=split.quietFeatures;
-  places=quietFeatures.slice(0,120).map(feature=>({...feature,id:feature.id,type:feature.label+' · OpenStreetMap'}));
+  places=quietFeatures.slice(0,120).map(feature=>({...feature,id:feature.osmId,type:feature.label+' · OpenStreetMap'}));
   if(placeLayer){placeLayer.clearLayers();places.forEach(place=>addPlaceMarker(place,placeLayer))}
   renderList();
   setStatus(places.length?'Найдено тихих мест и пешеходных объектов OSM: '+places.length:'В этой области пока не найдено подходящих объектов OSM');
