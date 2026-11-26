@@ -75,3 +75,19 @@ test('GPX import is size-limited and rejects any route outside the regional boun
   assert.match(source, /coords\.every\(\(\[lon,lat\]\)=>inKrasnodarKrai\(lat,lon\)\)/);
   assert.match(source, /if\(!routeInsideKrai\(imported\)\)/);
 });
+
+
+test('Adygea is included in the QuietWalk service area without an internal map cutout', () => {
+  assert.match(source, /coordinates:\[g\.coordinates\[0\]\]/);
+  assert.match(source, /kraiGeometries=matches\.map\(x=>\{const g=x\.geometry/);
+  assert.doesNotMatch(source, /maskInteriorHoles/);
+  assert.match(source, /Краснодарский край \+ Адыгея/);
+  assert.match(source, /inKrasnodarKrai\(lat,lon\)/);
+});
+
+test('classic full-colour OpenStreetMap tiles are preferred in light mode', () => {
+  assert.ok(source.indexOf('https://tile.openstreetmap.org/{z}/{x}/{y}.png') < source.indexOf('https://basemaps.cartocdn.com/rastertiles/light_all/'),
+    'standard OSM tiles should be preferred before the CARTO light fallback');
+  assert.match(source, /\.qw-light-tiles\{filter:none\}/);
+  assert.match(source, /fillColor:document\.body\.classList\.contains\('dark'\)\?'#111c22':'#e7ebe5'/);
+});
