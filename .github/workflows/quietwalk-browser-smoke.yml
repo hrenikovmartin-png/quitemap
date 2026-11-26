@@ -1,10 +1,11 @@
-name: QuietWalk browser smoke test
+name: QuietWalk Stage 3 checks
 
 on:
   push:
     branches:
       - main
       - stage-2-map-guard
+      - quietwalk-stage-3
   pull_request:
     branches:
       - main
@@ -14,9 +15,9 @@ permissions:
   contents: read
 
 jobs:
-  browser-smoke:
+  quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout tested revision
         uses: actions/checkout@v4
@@ -26,10 +27,17 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install Chromium and Playwright
+      - name: Install dependencies and browser test runner
         run: |
+          npm install
           npm install --no-save playwright
           npx playwright install --with-deps chromium
 
-      - name: Run QuietWalk browser smoke test
-        run: node tests/browser-smoke.mjs
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Run source safety regression tests
+        run: npm test
+
+      - name: Run browser smoke test
+        run: npm run test:browser

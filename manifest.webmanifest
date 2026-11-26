@@ -1,0 +1,19 @@
+{
+  "name": "QuietWalk MAX — тихие маршруты",
+  "short_name": "QuietWalk",
+  "description": "Пешеходные маршруты по спокойным улицам Краснодарского края.",
+  "lang": "ru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0d0814",
+  "theme_color": "#0d0814",
+  "icons": [
+    {
+      "src": "./quietwalk.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

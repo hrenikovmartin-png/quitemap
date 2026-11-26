@@ -1,11 +1,13 @@
 {
-  "name": "quietwalk-stage2-preview",
+  "name": "quietwalk-stage3-preview",
   "private": true,
   "version": "1.0.0",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "node tests/browser-smoke.mjs"
   },
   "devDependencies": {
     "vite": "^6.0.0"
