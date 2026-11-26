@@ -145,12 +145,17 @@ try {
   });
   await page.fill('#searchInput', 'TEST_START');
   await page.click('#searchBtn');
-  await page.waitForSelector('.leaflet-popup', { timeout: 15000 });
+  await page.waitForFunction(() => (document.getElementById('searchInput')?.value || '').includes('Краснодар'), { timeout: 15000 });
   await page.evaluate(() => window.qwUseSearch());
   await page.fill('#searchInput', 'TEST_END');
   await page.click('#searchBtn');
-  await page.waitForFunction(() => !!document.querySelector('.leaflet-popup'), { timeout: 15000 });
+  await page.waitForFunction(() => (document.getElementById('searchInput')?.value || '').includes('Краснодар'), { timeout: 15000 });
   await page.evaluate(() => window.qwUseSearch());
+  const selectedPoints = await page.evaluate(() => ({
+    start: document.getElementById('startLabel')?.textContent || '',
+    end: document.getElementById('endLabel')?.textContent || ''
+  }));
+  if (selectedPoints.start === selectedPoints.end) throw new Error('Route integration test selected the same point twice: ' + JSON.stringify(selectedPoints));
   await page.click('#quietBtn');
   try {
     await page.waitForFunction(() => {
