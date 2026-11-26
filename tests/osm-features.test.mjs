@@ -138,7 +138,9 @@ test('high-speed and multilane roads are classified as potential noise regardles
     { type: 'way', id: 102, center: { lat: 45, lon: 39 }, tags: { highway: 'unclassified', lanes: '4', maxspeed: '50' } },
     { type: 'way', id: 103, center: { lat: 45, lon: 39 }, tags: { highway: 'residential', maxspeed: '30' } }
   ], inside);
-  assert.equal(features.length, 2);
-  assert.ok(features.every(feature => feature.kind === 'noise' && feature.category === 'high-traffic-road'));
-  assert.ok(features.every(feature => feature.confidence === 'low'));
+  const noisy = features.filter(feature => feature.kind === 'noise');
+  assert.equal(noisy.length, 2);
+  assert.ok(noisy.every(feature => feature.category === 'high-traffic-road'));
+  assert.ok(noisy.every(feature => feature.confidence === 'low'));
+  assert.equal(features.length, 3);
 });
