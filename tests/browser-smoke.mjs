@@ -31,6 +31,7 @@ try {
   browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   page.on('pageerror', error => errors.push('pageerror: ' + error.message));
+  page.on('console', message => { if (message.type() === 'error') errors.push('console: ' + message.text()); });
   let nativeAlternativesRequested = false;
   let forceOrsFailure = false;
   await page.addInitScript(() => {
@@ -143,7 +144,23 @@ try {
   await page.waitForFunction(() => !!document.querySelector('.leaflet-popup'), { timeout: 15000 });
   await page.evaluate(() => window.qwUseSearch());
   await page.click('#quietBtn');
-  await page.waitForFunction(() => (document.getElementById('routeTitle')?.textContent || '').includes('Тихий маршрут'), { timeout: 30000 });
+  try {
+    await page.waitForFunction(() => {
+      const title = document.getElementById('routeTitle')?.textContent || '';
+      const status = document.getElementById('mapStatus')?.textContent || '';
+      const toast = document.getElementById('toast')?.textContent || '';
+      return title.includes('Тихий маршрут') || status.includes('Не удалось построить маршрут') || toast.includes('Не удалось построить пеший маршрут');
+    }, { timeout: 30000 });
+  } catch (error) {
+    const diagnostic = await page.evaluate(() => ({
+      title: document.getElementById('routeTitle')?.textContent || '',
+      status: document.getElementById('mapStatus')?.textContent || '',
+      toast: document.getElementById('toast')?.textContent || '',
+      start: document.getElementById('startLabel')?.textContent || '',
+      end: document.getElementById('endLabel')?.textContent || ''
+    }));
+    throw new Error('Quiet route generation timed out: ' + JSON.stringify(diagnostic) + ' · ' + errors.join(' | '));
+  }
   if (!nativeAlternativesRequested) throw new Error('Quiet route did not request native ORS alternatives');
   const routedResult = await page.evaluate(() => ({
     title: document.getElementById('routeTitle')?.textContent || '',
