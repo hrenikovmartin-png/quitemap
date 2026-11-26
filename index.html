@@ -105,6 +105,7 @@ html{scroll-behavior:smooth}body{-webkit-font-smoothing:antialiased;line-height:
 <script>try{var t=localStorage.getItem('qw_theme');if(t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches)document.body.classList.add('dark')}catch(e){}</script>
 <script type="module">
 import { haversine, bearingBetween, nearestRouteSegment } from './src/navigation/geometry.mjs';
+import { filterGpsFix } from './src/navigation/gps-filter.mjs';
 import { computeRouteNoisePenalty, computeQuietnessScore } from './src/routing/quiet-score.mjs';
 (()=>{'use strict';
 if(!window.L){
@@ -469,21 +470,39 @@ async function rerouteFromCurrent(lat,lon){
 }
 function onNavigationPosition(pos){
  if(!navActive||!pos||!pos.coords)return;
- const lat=pos.coords.latitude,lon=pos.coords.longitude,acc=Number.isFinite(pos.coords.accuracy)?pos.coords.accuracy:Infinity;
- if(!Number.isFinite(lat)||!Number.isFinite(lon)||!Number.isFinite(pos.timestamp)||Date.now()-pos.timestamp>20000)return;
+ let lat=pos.coords.latitude,lon=pos.coords.longitude;
+ const acc=Number.isFinite(pos.coords.accuracy)?pos.coords.accuracy:Infinity;
+ const now=Date.now();
+ if(!Number.isFinite(lat)||!Number.isFinite(lon)||!Number.isFinite(pos.timestamp)||
+    now-pos.timestamp>20000||pos.timestamp>now+5000)return;
  if(!inKrasnodarKrai(lat,lon)){
   if(acc<=35){$('navStatus').textContent='Вы за пределами области QuietWalk. Навигация остановлена.';stopNavigation();toast('GPS показывает точку за пределами Краснодарского края')}
   else $('navStatus').textContent='GPS пока неточный (±'+Math.round(acc)+' м). Проверяем положение в области QuietWalk…';
   return;
  }
  if(acc>60){$('navStatus').textContent='GPS пока неточный: ±'+Math.round(acc)+' м. Ждём более точное измерение…';return}
+ const previousFix=lastGpsFix;
+ const filtered=filterGpsFix(previousFix,{lat,lon,timestamp:pos.timestamp,accuracy:acc});
+ if(!filtered.accepted){
+  $('navStatus').textContent=filtered.reason==='jump'
+   ?'GPS получил резкий скачок положения. Игнорируем выброс и ждём следующее измерение…'
+   :'GPS получил устаревшее измерение. Ждём обновления…';
+  return;
+ }
+ // A smoothed point between two fixes can fall outside a concave regional border.
+ // In that rare case, keep the raw fix which has already passed the region check.
+ if(inKrasnodarKrai(filtered.position.lat,filtered.position.lon)){
+  lat=filtered.position.lat;lon=filtered.position.lon;
+ }
  const ll=L.latLng(lat,lon);
  let heading=null;
- if(Number.isFinite(pos.coords.heading)&&pos.coords.speed>1)heading=pos.coords.heading;
- else if(lastGpsFix&&map.distance(L.latLng(lastGpsFix.lat,lastGpsFix.lon),ll)>4)heading=bearingBetween([lastGpsFix.lat,lastGpsFix.lon],[lat,lon]);
- else if(lastGpsFix)heading=lastGpsFix.heading;
+ if(Number.isFinite(pos.coords.heading)&&Number.isFinite(pos.coords.speed)&&pos.coords.speed>1.5)heading=pos.coords.heading;
+ else if(previousFix&&map.distance(L.latLng(previousFix.lat,previousFix.lon),ll)>4)
+  heading=bearingBetween([previousFix.lon,previousFix.lat],[lon,lat]);
+ else if(previousFix)heading=previousFix.heading;
  if(heading===null)heading=0;
- createGpsArrow(ll,heading);lastGpsFix={lat,lon,heading};
+ createGpsArrow(ll,heading);
+ lastGpsFix={lat,lon,heading,accuracy:acc,timestamp:pos.timestamp};
  const coords=lastRoute.coords,near=nearestRouteSegment(ll,coords),nearest=near.distance;
  lastNearestIndex=near.index;
  const remaining=L.latLng(coords[coords.length-1][1],coords[coords.length-1][0]),toEnd=map.distance(ll,remaining);
