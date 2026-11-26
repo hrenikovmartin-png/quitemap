@@ -31,6 +31,33 @@ try {
   browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   page.on('pageerror', error => errors.push('pageerror: ' + error.message));
+  let nativeAlternativesRequested = false;
+  await page.addInitScript(() => {
+    localStorage.setItem('qwmax_orsKey', JSON.stringify('quietwalk-browser-test-key-not-real'));
+    localStorage.setItem('qwmax_reports', JSON.stringify([{ id: 9001, lat: 45.04, lon: 38.98, reason: 'Тестовая шумная дорога', created: new Date().toISOString() }]));
+  });
+  await page.route('https://nominatim.openstreetmap.org/search?**', async route => {
+    const q = new URL(route.request().url()).searchParams.get('q') || '';
+    const start = q.includes('TEST_START');
+    const item = start
+      ? { lat: '45.035', lon: '38.975', display_name: 'TEST_START, Краснодар, Россия' }
+      : { lat: '45.045', lon: '38.985', display_name: 'TEST_END, Краснодар, Россия' };
+    await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify([item]) });
+  });
+  await page.route('https://api.heigit.org/openrouteservice/**', async route => {
+    const body = JSON.parse(route.request().postData() || '{}');
+    if (body.alternative_routes) nativeAlternativesRequested = true;
+    const coords = body.coordinates || [];
+    const start = coords[0], end = coords[coords.length - 1];
+    const base = { type: 'Feature', geometry: { type: 'LineString', coordinates: [start, end] }, properties: { summary: { distance: 1500, duration: 1000 }, segments: [] } };
+    const mid = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2 + 0.0024];
+    const alternative = { type: 'Feature', geometry: { type: 'LineString', coordinates: [start, mid, end] }, properties: { summary: { distance: 1650, duration: 1100 }, segments: [] } };
+    const waypoint = { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: { summary: { distance: 1650, duration: 1100 }, segments: [] } };
+    await route.fulfill({ status: 200, contentType: 'application/geo+json', body: JSON.stringify({ type: 'FeatureCollection', features: coords.length === 2 ? [base, alternative] : [waypoint] }) });
+  });
+  await page.route('https://ovp.dresel.systems/api/interpreter', async route => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ elements: [] }) });
+  });
 
   const response = await page.goto('http://127.0.0.1:4173/index.html', { waitUntil: 'domcontentloaded', timeout: 45000 });
   if (!response?.ok()) throw new Error('index.html did not load successfully');
@@ -91,6 +118,28 @@ try {
   if (!result.status.includes('Область QuietWalk: Краснодарский край + Адыгея')) {
     throw new Error('The application did not accept the Krasnodar Krai boundary: ' + result.status);
   }
+  await page.fill('#searchInput', 'TEST_START');
+  await page.click('#searchBtn');
+  await page.waitForSelector('.leaflet-popup', { timeout: 15000 });
+  await page.evaluate(() => window.qwUseSearch());
+  await page.fill('#searchInput', 'TEST_END');
+  await page.click('#searchBtn');
+  await page.waitForFunction(() => !!document.querySelector('.leaflet-popup'), { timeout: 15000 });
+  await page.evaluate(() => window.qwUseSearch());
+  await page.click('#quietBtn');
+  await page.waitForFunction(() => (document.getElementById('routeTitle')?.textContent || '').includes('Тихий маршрут'), { timeout: 30000 });
+  if (!nativeAlternativesRequested) throw new Error('Quiet route did not request native ORS alternatives');
+  const routedResult = await page.evaluate(() => ({
+    title: document.getElementById('routeTitle')?.textContent || '',
+    status: document.getElementById('mapStatus')?.textContent || '',
+    distance: document.getElementById('distance')?.textContent || '',
+    description: document.getElementById('routeDesc')?.textContent || ''
+  }));
+  if (!routedResult.title.includes('Тихий маршрут') || !routedResult.distance || !routedResult.status.includes('построен')) {
+    throw new Error('Quiet route integration check failed: ' + JSON.stringify(routedResult));
+  }
+  console.log('PASS: quiet route is built from mocked ORS alternatives and mapped noise evidence.');
+
   const validGpx = '<?xml version="1.0"?><gpx version="1.1" creator="QuietWalk" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg><trkpt lat="45.04" lon="38.976"/><trkpt lat="45.041" lon="38.977"/></trkseg></trk></gpx>';
   await page.setInputFiles('#gpxInput', { name: 'quietwalk-valid.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(validGpx) });
   await page.waitForFunction(() => document.getElementById('routeTitle')?.textContent.includes('Импортированный GPX-маршрут'), { timeout: 15000 });
