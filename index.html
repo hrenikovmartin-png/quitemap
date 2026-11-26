@@ -107,6 +107,7 @@ html{scroll-behavior:smooth}body{-webkit-font-smoothing:antialiased;line-height:
 import { haversine, bearingBetween, nearestRouteSegment } from './src/navigation/geometry.mjs';
 import { computeRouteNoisePenalty, computeQuietnessScore, computeRouteQuietFeatureBonus, computeRoutePreference } from './src/routing/quiet-score.mjs';
 import { buildOverpassPlacesQuery, buildOverpassRouteQuery, normalizeOSMFeatures, splitOSMFeatures } from './src/data/osm-features.mjs';
+import { getPlaceCell, mergePlaceCells, readPlaceCells } from './src/data/place-cache.mjs';
 (()=>{'use strict';
 if(!window.L){
   const status=document.getElementById('mapStatus');
@@ -638,35 +639,36 @@ async function loadRouteContext(start,end){
 }
 async function loadPlaces(){
  if(!kraiGeometry)return;
- // Зелёные зоны и пешеходная инфраструктура классифицируются по тегам OSM.
- // Точные координаты каждого объекта дополнительно проверяются по контуру региона.
+ // Load one bounded geographic cell; keep previously visited cells in regional storage.
  try{
   const center=map.getCenter();
-  const bounds={
-   south:Math.max(KRAI_BOUNDS.south,center.lat-0.05),
-   west:Math.max(KRAI_BOUNDS.west,center.lng-0.06),
-   north:Math.min(KRAI_BOUNDS.north,center.lat+0.05),
-   east:Math.min(KRAI_BOUNDS.east,center.lng+0.06)
-  };
-  const cacheKey=[Math.round(center.lat*50),Math.round(center.lng*50)].join(':');
-  const cached=store.get('osmPlacesGeometryCacheV1',null);
-  let normalized=null;
-  if(cached&&cached.key===cacheKey&&cached.expiresAt>Date.now()&&Array.isArray(cached.features)){
-   normalized=cached.features.filter(feature=>inKrasnodarKrai(feature.lat,feature.lon));
-  }else{
-   const data=await requestOverpass(buildOverpassPlacesQuery(bounds),16000);
-   normalized=normalizeOSMFeatures(data.elements,inKrasnodarKrai);
-   store.set('osmPlacesGeometryCacheV1',{key:cacheKey,expiresAt:Date.now()+6*60*60*1000,features:normalized.slice(0,300)});
+  const cell=getPlaceCell(center.lat,center.lng,KRAI_BOUNDS);
+  const cache=store.get('osmPlacesRegionalCacheV1',{cells:{}});
+  const cachedCell=cache?.cells?.[cell.key];
+  let nextCache=cache;
+  if(!cachedCell||!Number.isFinite(cachedCell.fetchedAt)||Date.now()-cachedCell.fetchedAt>7*24*60*60*1000||!Array.isArray(cachedCell.features)){
+   const data=await requestOverpass(buildOverpassPlacesQuery(cell.bounds),16000);
+   const normalized=normalizeOSMFeatures(data.elements,inKrasnodarKrai);
+   nextCache=mergePlaceCells(cache,cell.key,normalized);
+   store.set('osmPlacesRegionalCacheV1',nextCache);
   }
-  const split=splitOSMFeatures(normalized);
+  const regionalFeatures=readPlaceCells(nextCache).filter(feature=>inKrasnodarKrai(feature.lat,feature.lon));
+  const split=splitOSMFeatures(regionalFeatures);
   quietFeatures=split.quietFeatures;
-  places=quietFeatures.slice(0,120).map(feature=>({...feature,id:feature.osmId,type:feature.label+' · OpenStreetMap'}));
+  places=quietFeatures.slice(0,1200).map(feature=>({...feature,id:feature.osmId,type:feature.label+' · OpenStreetMap'}));
   if(placeLayer){placeLayer.clearLayers();places.forEach(place=>addPlaceMarker(place,placeLayer))}
   renderList();
-  setStatus(places.length?'Найдено тихих мест и пешеходных объектов OSM: '+places.length:'В этой области пока не найдено подходящих объектов OSM');
+  const cellCount=Object.keys(nextCache?.cells||{}).length;
+  setStatus(places.length?'Собрано объектов OSM: '+places.length+' · изучено участков: '+cellCount:'В изученном участке пока не найдено подходящих объектов OSM');
  }catch(error){
-  places=[];quietFeatures=[];renderList();
-  $('listArea').innerHTML='<div class="empty">Не удалось загрузить тихие места из OpenStreetMap. Карта, поиск и построение маршрута продолжают работать.</div>';
+  const cached=readPlaceCells(store.get('osmPlacesRegionalCacheV1',{cells:{}})).filter(feature=>inKrasnodarKrai(feature.lat,feature.lon));
+  const split=splitOSMFeatures(cached);
+  quietFeatures=split.quietFeatures;
+  places=quietFeatures.slice(0,1200).map(feature=>({...feature,id:feature.osmId,type:feature.label+' · OpenStreetMap'}));
+  if(placeLayer){placeLayer.clearLayers();places.forEach(place=>addPlaceMarker(place,placeLayer))}
+  renderList();
+  if(!places.length)$('listArea').innerHTML='<div class="empty">Не удалось загрузить новые места из OpenStreetMap. Сохранённые участки остаются доступны; карта и построение маршрутов продолжают работать.</div>';
+  setStatus(places.length?'Показаны сохранённые объекты OSM · обновление участка временно недоступно':'Не удалось загрузить данные OpenStreetMap для этого участка');
  }
 }
 function restoreHistoryRoute(id){
