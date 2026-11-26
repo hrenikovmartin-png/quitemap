@@ -89,8 +89,8 @@ function classifyTags(tags = {}) {
     return { kind: 'quiet-feature', category: 'traffic-calmed', label: 'Улица с успокоением движения', confidence: 'low', weight: 0 };
   }
 
-  const speed = String(tags.maxspeed || '').match(/^\s*(\d+(?:\.\d+)?)\s*(?:km\/h|kmh)?\s*$/i);
-  if (speed && Number(speed[1]) <= 30 && highway) {
+  const lowSpeed = String(tags.maxspeed || '').match(/^\s*(\d+(?:\.\d+)?)\s*(?:km\/h|kmh)?\s*$/i);
+  if (lowSpeed && Number(lowSpeed[1]) <= 30 && highway) {
     return { kind: 'quiet-feature', category: 'low-speed-street', label: 'Улица с ограничением скорости до 30 км/ч', confidence: 'low', weight: 0 };
   }
   return null;
