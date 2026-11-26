@@ -370,7 +370,8 @@ async function buildRoute(quiet,guard=null){
     const context=await loadRouteContext(a,b);
     if(!context.quietFeatures.length&&!context.noiseSources.length)toast('В коридоре маршрута не найдены подходящие объекты OSM; используем доступные отметки и эвристику.');
    }catch(error){
-    routeQuietFeatures=quietFeatures;
+    routeQuietFeatures=quietFeatures.filter(feature=>minDistanceToReportsForOne([[a.lng,a.lat],[b.lng,b.lat]],feature)<500);
+    autoReports=[];
     toast('Данные OSM для этого коридора недоступны. Маршрут будет построен по имеющимся отметкам и эвристике.');
    }
   }
