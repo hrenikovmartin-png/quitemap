@@ -32,6 +32,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   page.on('pageerror', error => errors.push('pageerror: ' + error.message));
   let nativeAlternativesRequested = false;
+  let forceOrsFailure = false;
   await page.addInitScript(() => {
     localStorage.setItem('qwmax_orsKey', JSON.stringify('quietwalk-browser-test-key-not-real'));
     localStorage.setItem('qwmax_reports', JSON.stringify([{ id: 9001, lat: 45.04, lon: 38.98, reason: 'Тестовая шумная дорога', created: new Date().toISOString() }]));
@@ -45,6 +46,10 @@ try {
     await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify([item]) });
   });
   await page.route('https://api.heigit.org/openrouteservice/**', async route => {
+    if (forceOrsFailure) {
+      await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'mock ORS unavailable' }) });
+      return;
+    }
     const body = JSON.parse(route.request().postData() || '{}');
     if (body.alternative_routes) nativeAlternativesRequested = true;
     const coords = body.coordinates || [];
@@ -116,6 +121,16 @@ try {
   }
   // Mock Overpass only after the initial boundary/shell checks; startup place loading
   // is intentionally left untouched so this integration test cannot mask boundary state.
+  await page.route('https://routing.openstreetmap.de/routed-foot/**', async route => {
+    const url = new URL(route.request().url());
+    const path = url.pathname.split('/driving/')[1] || '';
+    const coords = path.split(';').map(pair => pair.split(',').map(Number));
+    const start = coords[0], end = coords[coords.length - 1];
+    const base = { distance: 1500, duration: 1000, geometry: { type: 'LineString', coordinates: [start, end] }, legs: [] };
+    const mid = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2 + 0.0024];
+    const alternative = { distance: 1570, duration: 1050, geometry: { type: 'LineString', coordinates: [start, mid, end] }, legs: [] };
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ code: 'Ok', routes: url.searchParams.get('alternatives') === 'true' ? [base, alternative] : [base] }) });
+  });
   await page.route('https://ovp.dresel.systems/api/interpreter', async route => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ elements: [] }) });
   });
@@ -140,6 +155,28 @@ try {
     throw new Error('Quiet route integration check failed: ' + JSON.stringify(routedResult));
   }
   console.log('PASS: quiet route is built from mocked ORS alternatives and mapped noise evidence.');
+
+  forceOrsFailure = true;
+  await page.click('#resetBtn');
+  await page.fill('#searchInput', 'TEST_START');
+  await page.click('#searchBtn');
+  await page.waitForSelector('.leaflet-popup', { timeout: 15000 });
+  await page.evaluate(() => window.qwUseSearch());
+  await page.fill('#searchInput', 'TEST_END');
+  await page.click('#searchBtn');
+  await page.waitForFunction(() => !!document.querySelector('.leaflet-popup'), { timeout: 15000 });
+  await page.evaluate(() => window.qwUseSearch());
+  await page.click('#quietBtn');
+  await page.waitForFunction(() => (document.getElementById('routeTitle')?.textContent || '').includes('Тихий маршрут'), { timeout: 30000 });
+  const fallbackResult = await page.evaluate(() => ({
+    title: document.getElementById('routeTitle')?.textContent || '',
+    status: document.getElementById('mapStatus')?.textContent || '',
+    distance: document.getElementById('distance')?.textContent || ''
+  }));
+  if (!fallbackResult.title.includes('Тихий маршрут') || !fallbackResult.status.includes('построен') || !fallbackResult.distance) {
+    throw new Error('Quiet route OSRM fallback check failed: ' + JSON.stringify(fallbackResult));
+  }
+  console.log('PASS: quiet route remains available when ORS is unavailable and OSRM alternatives are used.');
 
   const validGpx = '<?xml version="1.0"?><gpx version="1.1" creator="QuietWalk" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg><trkpt lat="45.04" lon="38.976"/><trkpt lat="45.041" lon="38.977"/></trkseg></trk></gpx>';
   await page.setInputFiles('#gpxInput', { name: 'quietwalk-valid.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(validGpx) });
