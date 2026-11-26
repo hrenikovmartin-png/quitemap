@@ -106,7 +106,7 @@ html{scroll-behavior:smooth}body{-webkit-font-smoothing:antialiased;line-height:
 <script type="module">
 import { haversine, bearingBetween, nearestRouteSegment } from './src/navigation/geometry.mjs';
 import { computeRouteNoisePenalty, computeQuietnessScore, computeRouteQuietFeatureBonus, computeRoutePreference } from './src/routing/quiet-score.mjs';
-import { selectMeaningfullyQuieterRoute, routeGeometrySimilarity } from './src/routing/route-quality.mjs';
+import { selectMeaningfullyQuieterRoute } from './src/routing/route-quality.mjs';
 import { buildOverpassPlacesQuery, buildOverpassRouteQuery, normalizeOSMFeatures, splitOSMFeatures } from './src/data/osm-features.mjs';
 import { getPlaceCell, mergePlaceCells, readPlaceCells } from './src/data/place-cache.mjs';
 (()=>{'use strict';
@@ -384,7 +384,7 @@ async function buildRoute(quiet,guard=null){
    // Разные промежуточные точки заставляют маршрутизатор искать реальные обходные варианты,
    // а не повторно запрашивать тот же кратчайший путь.
    const directM=haversine(start,finish),cosL=Math.cos((a.lat+b.lat)/2*Math.PI/180),mx=dx*cosL*111320,my=dy*111320,L2=Math.hypot(mx,my)||1;
-   const offsets=[0.10,0.20].map(k=>Math.max(60,Math.min(600,directM*k)));
+   const offsets=[0.12,0.28,0.42].map(k=>Math.max(80,Math.min(600,directM*k)));
    for(const off of offsets){
     for(const sign of [-1,1]){
      if(guard&&!guard())return;
