@@ -5,7 +5,6 @@ const SHELL=[
   new URL('index.html',BASE).href,
   new URL('krasnodar-krai.geojson.gz.b64',BASE).href,
   new URL('manifest.webmanifest',BASE).href,
-  new URL('quietwalk.svg',BASE).href,
   new URL('quietwalk.svg',BASE).href
 ];
 
