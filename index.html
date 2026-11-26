@@ -254,10 +254,10 @@ function minDistanceToReports(coords){if(!reports.length)return 99999;let min=99
 function routeNoisePenalty(route){return computeRouteNoisePenalty(route.geometry.coordinates,[...reports,...autoReports],minDistanceToReportsForOne,Number($('sensitivity').value))}
 function routeNoiseExplanation(base,chosen){
  const sources=[...reports,...autoReports];
- const differences=sources.map(source=>({reason:source.reason||'шумовой объект',before:minDistanceToReportsForOne(base.geometry.coordinates,source),after:minDistanceToReportsForOne(chosen.geometry.coordinates,source)}))
+ const baseCompact=simplifyNoiseGeometry(base.geometry.coordinates,120,12),chosenCompact=simplifyNoiseGeometry(chosen.geometry.coordinates,120,12);
+ const differences=sources.map(source=>({reason:source.reason||'шумовой объект',before:minDistanceToReportsForOne(baseCompact,source),after:minDistanceToReportsForOne(chosenCompact,source)}))
   .filter(item=>Number.isFinite(item.before)&&Number.isFinite(item.after)&&item.before<380&&item.after-item.before>45)
   .sort((a,b)=>(b.after-b.before)-(a.after-a.before)).slice(0,3);
- const baseCompact=simplifyNoiseGeometry(base.geometry.coordinates,120,12),chosenCompact=simplifyNoiseGeometry(chosen.geometry.coordinates,120,12);
  const quietEvidence=routeQuietFeatures.map(feature=>({label:feature.label||'тихая инфраструктура',before:minDistanceToReportsForOne(baseCompact,feature),after:minDistanceToReportsForOne(chosenCompact,feature)}))
   .filter(item=>Number.isFinite(item.before)&&Number.isFinite(item.after)&&item.after<180&&item.before-item.after>20)
   .sort((a,b)=>a.after-b.after).slice(0,2);
@@ -602,11 +602,11 @@ async function loadRouteContext(start,end){
     ?simplifyNoiseGeometry(feature.geometry):null;
    return {...feature,geometry};
   });
-  store.set('osmRouteContextCache',{key:cacheKey,expiresAt:Date.now()+2*60*60*1000,features:normalized.slice(0,400)});
+  store.set('osmRouteContextCache',{key:cacheKey,expiresAt:Date.now()+2*60*60*1000,features:normalized.slice(0,240)});
  }
  const split=splitOSMFeatures(normalized);
- routeQuietFeatures=split.quietFeatures.slice(0,150);
- autoReports=split.noiseFeatures.slice(0,250).map(feature=>({
+ routeQuietFeatures=split.quietFeatures.slice(0,100);
+ autoReports=split.noiseFeatures.slice(0,140).map(feature=>({
   ...feature,id:feature.osmId,reason:feature.label,
   highway:feature.tags?.highway||null,railway:feature.tags?.railway||null,
   automatic:true
