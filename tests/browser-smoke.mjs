@@ -51,7 +51,7 @@ try {
     const start = coords[0], end = coords[coords.length - 1];
     const base = { type: 'Feature', geometry: { type: 'LineString', coordinates: [start, end] }, properties: { summary: { distance: 1500, duration: 1000 }, segments: [] } };
     const mid = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2 + 0.0024];
-    const alternative = { type: 'Feature', geometry: { type: 'LineString', coordinates: [start, mid, end] }, properties: { summary: { distance: 1650, duration: 1100 }, segments: [] } };
+    const alternative = { type: 'Feature', geometry: { type: 'LineString', coordinates: [start, mid, end] }, properties: { summary: { distance: 1570, duration: 1050 }, segments: [] } };
     const waypoint = { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: { summary: { distance: 1650, duration: 1100 }, segments: [] } };
     await route.fulfill({ status: 200, contentType: 'application/geo+json', body: JSON.stringify({ type: 'FeatureCollection', features: coords.length === 2 ? [base, alternative] : [waypoint] }) });
   });
