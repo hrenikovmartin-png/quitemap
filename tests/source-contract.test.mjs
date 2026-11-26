@@ -164,3 +164,11 @@ test('quiet-only OSM corridor data is included in the route explanation', () => 
 test('candidate scoring uses simplified route geometry for both noise and quiet-feature distances', () => {
   assert.match(source, /computeRoutePreference\(compact,\[\.\.\.reports,\.\.\.autoReports\],routeQuietFeatures/);
 });
+
+
+test('quiet place map rendering draws detailed geometry only when every vertex is inside the service area', () => {
+  assert.match(source, /raw\.every\(point=>Array\.isArray\(point\).*inKrasnodarKrai\(\+point\[1\],\+point\[0\]\)\)/);
+  assert.match(source, /const isArea=closed&&!!\(p\.tags\?\.leisure\|\|p\.tags\?\.landuse\)/);
+  assert.match(source, /L\.polygon\(latlngs,style\):L\.polyline\(latlngs,style\)/);
+  assert.match(source, /simplifyNoiseGeometry\(raw,180,7\)/);
+});
