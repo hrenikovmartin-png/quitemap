@@ -96,8 +96,8 @@ try {
   await page.waitForFunction(() => document.getElementById('routeTitle')?.textContent.includes('Импортированный GPX-маршрут'), { timeout: 15000 });
   const adygeaGpx = '<?xml version="1.0"?><gpx version="1.1" creator="QuietWalk" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg><trkpt lat="44.609" lon="40.1"/><trkpt lat="44.61" lon="40.11"/></trkseg></trk></gpx>';
   await page.setInputFiles('#gpxInput', { name: 'quietwalk-adygea.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(adygeaGpx) });
-  await page.waitForFunction(() => document.getElementById('routeTitle')?.textContent.includes('Импортированный GPX-маршрут'), { timeout: 15000 });
-  if (!(await page.locator('#toast').textContent()).includes('области QuietWalk')) throw new Error('Adygea route was not accepted by the QuietWalk service area');
+  await page.waitForFunction(() => (document.getElementById('toast')?.textContent || '').includes('GPX загружен') && (document.getElementById('toast')?.textContent || '').includes('области QuietWalk'), { timeout: 15000 });
+  if (!(await page.locator('#routeTitle').textContent()).includes('Импортированный GPX-маршрут')) throw new Error('Adygea route was not accepted by the QuietWalk service area');
   console.log('PASS: GPX route inside Adygea is accepted.');
   const outsideGpx = '<?xml version="1.0"?><gpx version="1.1" creator="QuietWalk" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg><trkpt lat="41" lon="29"/><trkpt lat="41.001" lon="29.001"/></trkseg></trk></gpx>';
   await page.setInputFiles('#gpxInput', { name: 'quietwalk-outside.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(outsideGpx) });
