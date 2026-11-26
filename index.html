@@ -251,6 +251,18 @@ async function getFootRoute(coords){
 }
 function minDistanceToReports(coords){if(!reports.length)return 99999;let min=99999;for(let i=0;i<coords.length;i+=Math.max(1,Math.floor(coords.length/80))){for(const r of reports)min=Math.min(min,haversine(coords[i],[r.lon,r.lat]))}return min}
 function routeNoisePenalty(route){return computeRouteNoisePenalty(route.geometry.coordinates,[...reports,...autoReports],minDistanceToReportsForOne,Number($('sensitivity').value))}
+function routeNoiseExplanation(base,chosen){
+ const sources=[...reports,...autoReports];
+ if(!sources.length)return 'Шумовые данные отсутствуют: сравнение выполнено без подтверждённых объектов OSM.';
+ const differences=sources.map(source=>({reason:source.reason||'шумовой объект',before:minDistanceToReportsForOne(base.geometry.coordinates,source),after:minDistanceToReportsForOne(chosen.geometry.coordinates,source)}))
+  .filter(item=>Number.isFinite(item.before)&&Number.isFinite(item.after)&&item.before<380&&item.after-item.before>45)
+  .sort((a,b)=>(b.after-b.before)-(a.after-a.before)).slice(0,3);
+ if(differences.length)return 'Почему этот вариант может быть тише: он дальше от '+differences.map(item=>item.reason.toLowerCase()).join(', ')+', найденных на OpenStreetMap. Это относительная оценка по карте, не измерение дБ.';
+ const reduction=routeNoisePenalty(base)-routeNoisePenalty(chosen);
+ if(reduction>1)return 'Модельная экспозиция к отмеченным источникам ниже на '+Math.round(reduction)+' условных единиц. Это не децибелы.';
+ return 'Заметного преимущества по найденным шумовым объектам не обнаружено; выбран компромисс по длине и времени. Оценка не является измерением дБ.';
+}
+
 function simplifyNoiseGeometry(coords,maxPoints=180,toleranceMeters=8){
  if(!Array.isArray(coords)||coords.length<3)return Array.isArray(coords)?coords:null;
  const clean=coords.filter(p=>Array.isArray(p)&&Number.isFinite(+p[0])&&Number.isFinite(+p[1])).map(p=>[+p[0],+p[1]]);
@@ -403,7 +415,7 @@ async function buildRoute(quiet,guard=null){
   store.set('routeHistory',routeHistory);if(activeTab==='history')renderList();
   $('routeCard').style.display='block';
   $('routeTitle').textContent=quiet?'Альтернативный маршрут':'Кратчайший пеший маршрут';
-  $('routeDesc').textContent=quiet?((reports.length||autoReports.length)?'Подобран вариант с учётом '+(autoReports.length?'автоматически найденных объектов OpenStreetMap':'ваших шумовых отметок')+'. Это оценка по карте объектов, не измерение децибел.':(detour>1?'Подобран обходной вариант. Без шумовых данных это эвристика, а не гарантия тишины.':'Заметно тише обход без большого крюка не нашёлся, маршрут совпадает с кратчайшим. Добавьте шумовые отметки или найдите шумовые зоны автоматически.')):(orsKey?'Кратчайший пеший вариант через OpenRouteService.':'Кратчайший доступный пеший вариант через резервный маршрутизатор.');
+  $('routeDesc').textContent=quiet?((reports.length||autoReports.length)?'Подобран вариант с учётом '+(autoReports.length?'автоматически найденных объектов OpenStreetMap':'ваших шумовых отметок')+'. '+routeNoiseExplanation(base,chosen):(detour>1?'Подобран обходной вариант. Без шумовых данных это эвристика, а не гарантия тишины.':'Заметно тише обход без большого крюка не нашёлся, маршрут совпадает с кратчайшим. Добавьте шумовые отметки или найдите шумовые зоны автоматически.')):(orsKey?'Кратчайший пеший вариант через OpenRouteService.':'Кратчайший доступный пеший вариант через резервный маршрутизатор.');
   $('distance').textContent=km.toFixed(2)+' км';$('duration').textContent=(m=>m>=60?Math.floor(m/60)+' ч '+(m%60)+' мин':m+' мин')(Math.max(1,Math.round(min)));$('detour').textContent=quiet?'+'+Math.round(detour)+'%':'—';qwScore(chosen.geometry.coordinates);
   setStatus(quiet?'Альтернативный маршрут построен':'Кратчайший пеший маршрут построен');toast('Маршрут готов. Проверьте его перед выходом.');
  }catch(e){console.error(e);toast(e.message+' Попробуйте ещё раз или выберите другие точки.');setStatus('Не удалось построить маршрут')}
