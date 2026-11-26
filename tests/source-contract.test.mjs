@@ -198,3 +198,9 @@ test('route provider failures report both ORS and public fallback diagnostics wi
   assert.match(source, /fallbackError\.message/);
   assert.doesNotMatch(source, /orsKey\s*\+|Authorization[^\n]*orsKey[^\n]*toast/);
 });
+
+
+test('quiet-route detour limits keep the direct-distance value in scope with or without provider alternatives', () => {
+  assert.match(source, /const candidates=\[base,\.\.\.\(Array\.isArray\(base\.alternatives\)\?base\.alternatives:\[\]\)\];\s*const directM=haversine\(start,finish\)/);
+  assert.match(source, /const high=Number\(\$\('sensitivity'\)\.value\)===3;const maxDetour=directM/);
+});
