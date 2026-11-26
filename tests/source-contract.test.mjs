@@ -100,3 +100,19 @@ test('the map remains fully tiled outside the highlighted QuietWalk service area
   assert.match(source, /maxBoundsViscosity:1/);
   assert.match(source, /\.leaflet-container\{background:#f2f0e9\}/);
 });
+
+
+test('Stage 4.2 loads evidence-based OSM green and pedestrian features only after boundary readiness', () => {
+  assert.match(source, /from '\.\/src\/data\/osm-features\.mjs'/);
+  assert.match(source, /async function loadPlaces\(\)\{\s*if\(!kraiGeometry\)return;/);
+  assert.match(source, /buildOverpassPlacesQuery\(bounds\)/);
+  assert.match(source, /normalizeOSMFeatures\(data\.elements,inKrasnodarKrai\)/);
+  assert.match(source, /expiresAt:Date\.now\(\)\+6\*60\*60\*1000/);
+});
+
+test('automatic noise features share the OSM classifier and preserve road/rail metadata', () => {
+  assert.match(source, /const split=splitOSMFeatures\(normalized\)/);
+  assert.match(source, /split\.noiseFeatures\.map\(feature/);
+  assert.match(source, /highway:feature\.tags\?\.highway/);
+  assert.match(source, /railway:feature\.tags\?\.railway/);
+});
