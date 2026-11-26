@@ -1,13 +1,12 @@
 const CACHE_PREFIX='quietwalk-shell-';
-const CACHE_NAME=CACHE_PREFIX+'v1';
+const CACHE_NAME=CACHE_PREFIX+'v2';
 const BASE=self.registration.scope;
 const SHELL=[
   new URL('index.html',BASE).href,
   new URL('krasnodar-krai.geojson.gz.b64',BASE).href,
   new URL('manifest.webmanifest',BASE).href,
   new URL('quietwalk.svg',BASE).href,
-  'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js',
-  'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'
+  new URL('quietwalk.svg',BASE).href
 ];
 
 self.addEventListener('install',event=>{
@@ -36,8 +35,9 @@ self.addEventListener('fetch',event=>{
   if(request.method!=='GET')return;
   const url=new URL(request.url);
   const sameOrigin=url.origin===self.location.origin;
-  const libraryCdn=['cdn.jsdelivr.net','unpkg.com','cdnjs.cloudflare.com'].includes(url.hostname);
-  if(!sameOrigin&&!libraryCdn)return;
+  // Third-party libraries must use the browser's live network path. Caching
+  // CDN responses here can pin a stale/broken Leaflet build and hide fallback errors.
+  if(!sameOrigin)return;
   if(sameOrigin&&request.mode==='navigate'){
     event.respondWith((async()=>{
       try{
