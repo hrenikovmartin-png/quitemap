@@ -297,6 +297,7 @@ async function loadAutomaticNoise(){
  const q='[out:json][timeout:18][maxsize:67108864];(way[highway~"^(motorway|trunk|primary|secondary|tertiary|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"]('+bbox+');way[railway~"^(rail|tram|light_rail|subway)$"]('+bbox+');way[landuse~"^(industrial|commercial)$"]('+bbox+');way[leisure=stadium]('+bbox+');node[amenity~"^(fuel|nightclub|bar)$"]('+bbox+'););out geom tags;';
  const button=$('autoNoiseBtn');if(button)button.disabled=true;
  setStatus('Загружаем шумовые зоны из OpenStreetMap…');
+ try{
   const data=await requestOverpass(q,20000);
   const normalized=normalizeOSMFeatures(data.elements,inKrasnodarKrai);
   const split=splitOSMFeatures(normalized);
