@@ -174,10 +174,11 @@ try {
     title: document.getElementById('routeTitle')?.textContent || '',
     status: document.getElementById('mapStatus')?.textContent || '',
     distance: document.getElementById('distance')?.textContent || '',
-    description: document.getElementById('routeDesc')?.textContent || ''
+    description: document.getElementById('routeDesc')?.textContent || '',
+    toast: document.getElementById('toast')?.textContent || ''
   }));
   if (!routedResult.title.includes('Тихий маршрут') || !routedResult.distance || !routedResult.status.includes('построен')) {
-    throw new Error('Quiet route integration check failed: ' + JSON.stringify(routedResult));
+    throw new Error('Quiet route integration check failed: ' + JSON.stringify(routedResult) + ' · ' + errors.join(' | '));
   }
   console.log('PASS: quiet route is built from mocked ORS alternatives and mapped noise evidence.');
 
