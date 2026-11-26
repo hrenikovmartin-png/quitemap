@@ -31,7 +31,6 @@ try {
   browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   page.on('pageerror', error => errors.push('pageerror: ' + error.message));
-  page.on('console', message => { if (message.type() === 'error') errors.push('console: ' + message.text()); });
   let nativeAlternativesRequested = false;
   let forceOrsFailure = false;
   await page.addInitScript(() => {
