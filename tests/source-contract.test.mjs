@@ -48,7 +48,7 @@ test('rerouting is protected by a navigation session token', () => {
 });
 
 test('quietness score is clearly described as an estimate, not decibels', () => {
-  assert.match(source, /оценка по карте, не дБ/);
+  assert.match(source, /Обе оценки модельные, по OpenStreetMap; не являются измерением децибел/);
 });
 
 test('GPS permission denial and synchronous browser errors cleanly stop navigation', () => {
@@ -139,4 +139,10 @@ test('route-context cache is bounded and quiet-feature geometries outside the re
 test('all selected route candidates remain subject to the existing exact regional geometry guard', () => {
   assert.match(source, /if\(!routeInsideKrai\(chosen\)\)throw Error\(/);
   assert.match(source, /if\(routeInsideKrai\(r\)&&!candidates\.some/);
+});
+
+
+test('failed route-corridor lookup cannot reuse stale automatic noise features from another route', () => {
+  assert.match(source, /routeQuietFeatures=quietFeatures\.filter\(feature=>minDistanceToReportsForOne\(\[\[a\.lng,a\.lat\],\[b\.lng,b\.lat\]\],feature\)<500\)/);
+  assert.match(source, /autoReports=\[\];\s*toast\('Данные OSM для этого коридора недоступны/);
 });
