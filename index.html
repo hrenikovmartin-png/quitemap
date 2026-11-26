@@ -568,7 +568,25 @@ const bad=rows.filter(r=>r.includes('Не работает')).length;out.innerHT
 window.qwDeleteReport=function(id){reports=reports.filter(r=>r.id!==id);store.set('reports',reports);try{map.closePopup()}catch(e){}drawReports();renderList();toast('Отметка удалена')};
 function clearReports(){if(!confirm('Удалить все ваши шумовые отметки на этом устройстве?'))return;reports=[];store.set('reports',reports);drawReports();renderList();toast('Ваши отметки удалены')}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function addPlaceMarker(p,layer){L.marker([p.lat,p.lon]).addTo(layer||map).bindPopup('<div class="popup-title">'+escapeHtml(p.name)+'</div><div style="font-size:12px">'+escapeHtml(p.type||'Место')+'</div><div class="popup-actions"><button onclick="window.qwFavorite('+p.id+')">В избранное</button><button onclick="window.qwNoise('+p.lat+','+p.lon+')">Отметить шум</button></div>')}
+function addPlaceMarker(p,layer){
+ const target=layer||map;
+ const popup='<div class="popup-title">'+escapeHtml(p.name)+'</div><div style="font-size:12px">'+escapeHtml(p.type||'Место')+'</div><div class="popup-actions"><button onclick="window.qwFavorite('+p.id+')">В избранное</button><button onclick="window.qwNoise('+p.lat+','+p.lon+')">Отметить шум</button></div>';
+ const raw=Array.isArray(p.geometry)?p.geometry:null;
+ const geometry=raw&&raw.length>=2&&raw.every(point=>Array.isArray(point)&&Number.isFinite(+point[0])&&Number.isFinite(+point[1])&&inKrasnodarKrai(+point[1],+point[0]))?simplifyNoiseGeometry(raw,180,7):null;
+ if(geometry&&geometry.length>=2){
+  const latlngs=geometry.map(point=>[point[1],point[0]]);
+  const first=geometry[0],last=geometry[geometry.length-1];
+  const closed=Math.abs(first[0]-last[0])<0.00001&&Math.abs(first[1]-last[1])<0.00001;
+  const isArea=closed&&!!(p.tags?.leisure||p.tags?.landuse);
+  const style=isArea
+   ?{color:'#27875c',weight:2,opacity:.9,fillColor:'#65b985',fillOpacity:.22}
+   :{color:p.category==='calm-street'?'#4a9c87':'#3989b8',weight:4,opacity:.82,lineCap:'round',lineJoin:'round'};
+  const shape=isArea?L.polygon(latlngs,style):L.polyline(latlngs,style);
+  shape.addTo(target).bindPopup(popup);
+  return shape;
+ }
+ return L.circleMarker([p.lat,p.lon],{radius:6,color:'#27875c',weight:2,fillColor:'#65b985',fillOpacity:.9}).addTo(target).bindPopup(popup);
+}
 window.qwFavorite=id=>{const p=places.find(x=>String(x.id)===String(id));if(!p)return;const exists=favorites.some(f=>String(typeof f==='object'?f.id:f)===String(id));favorites=exists?favorites.filter(f=>String(typeof f==='object'?f.id:f)!==String(id)):[...favorites,{id:p.id,name:p.name,lat:p.lat,lon:p.lon,type:p.type}];store.set('favorites',favorites);renderList();toast(exists?'Удалено из избранного':'Добавлено в избранное')};
 async function requestOverpass(query,timeout=18000){
  const hosts=['https://ovp.dresel.systems/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter','https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter'];
