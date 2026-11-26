@@ -6,6 +6,7 @@ on:
       - main
       - stage-2-map-guard
       - quietwalk-stage-3
+      - quietwalk-map-adygea-fix
   pull_request:
     branches:
       - main
