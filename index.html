@@ -257,9 +257,10 @@ function routeNoiseExplanation(base,chosen){
  const differences=sources.map(source=>({reason:source.reason||'шумовой объект',before:minDistanceToReportsForOne(base.geometry.coordinates,source),after:minDistanceToReportsForOne(chosen.geometry.coordinates,source)}))
   .filter(item=>Number.isFinite(item.before)&&Number.isFinite(item.after)&&item.before<380&&item.after-item.before>45)
   .sort((a,b)=>(b.after-b.before)-(a.after-a.before)).slice(0,3);
- const quietEvidence=routeQuietFeatures.map(feature=>({label:feature.label||'тихая инфраструктура',before:minDistanceToReportsForOne(base.geometry.coordinates,feature),after:minDistanceToReportsForOne(chosen.geometry.coordinates,feature)}))
+ const baseCompact=simplifyNoiseGeometry(base.geometry.coordinates,120,12),chosenCompact=simplifyNoiseGeometry(chosen.geometry.coordinates,120,12);
+ const quietEvidence=routeQuietFeatures.map(feature=>({label:feature.label||'тихая инфраструктура',before:minDistanceToReportsForOne(baseCompact,feature),after:minDistanceToReportsForOne(chosenCompact,feature)}))
   .filter(item=>Number.isFinite(item.before)&&Number.isFinite(item.after)&&item.after<180&&item.before-item.after>20)
-  .sort((a,b)=>(a.after-b.after)-(b.after-b.after)).slice(0,2);
+  .sort((a,b)=>a.after-b.after).slice(0,2);
  const parts=[];
  if(differences.length)parts.push('дальше от '+differences.map(item=>item.reason.toLowerCase()).join(', '));
  const uniqueQuiet=[...new Set(quietEvidence.map(item=>item.label.toLowerCase()))];
@@ -347,7 +348,8 @@ function minDistanceToReportsForOne(coords,r){
 function qwScore(coords){
  const rs=[...reports,...autoReports];let el=document.getElementById('qwScore');if(!el){el=document.createElement('div');el.id='qwScore';$('routeDesc').after(el)}
  const idx=rs.length?computeQuietnessScore(coords,rs,minDistanceToReportsForOne):null;
- const quietBonus=routeQuietFeatures.length?computeRouteQuietFeatureBonus(coords,routeQuietFeatures,minDistanceToReportsForOne):null;
+ const compact=simplifyNoiseGeometry(coords,120,12);
+ const quietBonus=routeQuietFeatures.length?computeRouteQuietFeatureBonus(coords,routeQuietFeatures,(_,feature)=>minDistanceToReportsForOne(compact,feature),Number($('sensitivity').value)):null;
  if(idx===null&&quietBonus===null){el.innerHTML='<div class="qs-t">Индекс тишины: недостаточно данных. Попробуйте загрузить объекты OSM для этого маршрута.</div>';return}
  const rows=[];
  if(idx!==null)rows.push('<div class="qs-t">Оценка по шумовым объектам <b>'+idx+'</b>/100</div><div class="qs-bar"><i style="width:'+idx+'%"></i></div>');
@@ -395,7 +397,7 @@ async function buildRoute(quiet,guard=null){
    const pool=acceptable.length?acceptable:[base];if(!acceptable.length)toast('Тихого обхода без большого крюка не нашлось, оставлен кратчайший путь');
    // Сначала избегаем пользовательских шумовых отметок. При равной оценке предпочитаем
    // умеренный обход, поэтому тихий режим отличается от кратчайшего даже без отметок.
-   const preference=route=>computeRoutePreference(route.geometry.coordinates,[...reports,...autoReports],routeQuietFeatures,minDistanceToReportsForOne,Number($('sensitivity').value))?.score??routeNoisePenalty(route);
+   const preference=route=>{const compact=simplifyNoiseGeometry(route.geometry.coordinates,120,12);return computeRoutePreference(route.geometry.coordinates,[...reports,...autoReports],routeQuietFeatures,(_,feature)=>minDistanceToReportsForOne(compact,feature),Number($('sensitivity').value))?.score??routeNoisePenalty(route)};
    chosen=pool.sort((x,y)=>{
     const scoreDiff=preference(x)-preference(y);
     if(Math.abs(scoreDiff)>1)return scoreDiff;
@@ -603,8 +605,8 @@ async function loadRouteContext(start,end){
   store.set('osmRouteContextCache',{key:cacheKey,expiresAt:Date.now()+2*60*60*1000,features:normalized.slice(0,400)});
  }
  const split=splitOSMFeatures(normalized);
- routeQuietFeatures=split.quietFeatures;
- autoReports=split.noiseFeatures.map(feature=>({
+ routeQuietFeatures=split.quietFeatures.slice(0,150);
+ autoReports=split.noiseFeatures.slice(0,250).map(feature=>({
   ...feature,id:feature.osmId,reason:feature.label,
   highway:feature.tags?.highway||null,railway:feature.tags?.railway||null,
   automatic:true
