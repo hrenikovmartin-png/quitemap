@@ -229,27 +229,65 @@ window.qwNoise=(lat,lon)=>{saveNoiseReportAt(lat,lon)};
 window.qwUseSearch=function(){if(!searchMarker)return;if(points.length>=2){toast('Сбросьте маршрут, чтобы выбрать новые точки');return}setPoint(searchMarker.getLatLng());map.closePopup()};
 function chooseSearch(item){const ll=L.latLng(+item.lat,+item.lon);if(!inKrasnodarKrai(ll.lat,ll.lng)){toast('Это место находится за пределами области QuietWalk');return}$('suggestions').style.display='none';safeSetView(ll,16);if(searchMarker)map.removeLayer(searchMarker);searchMarker=L.marker(ll).addTo(map).bindPopup('<div class="popup-title">'+escapeHtml(item.display_name)+'</div><div class="popup-actions"><button onclick="window.qwUseSearch()">Поставить точку маршрута</button></div>').openPopup();$('searchInput').value=item.display_name.split(',').slice(0,2).join(',');}
 function avoidPolygons(){if(!reports.length)return null;const radius=Number($('sensitivity').value),d=radius===1?0.0007:radius===2?0.0012:0.002;return {type:'MultiPolygon',coordinates:reports.map(r=>[[[r.lon-d,r.lat-d],[r.lon+d,r.lat-d],[r.lon+d,r.lat+d],[r.lon-d,r.lat+d],[r.lon-d,r.lat-d]]])}}
-async function getFootRoute(coords){
+async function getFootRoute(coords,{alternatives=false}={}) {
   if(!coords.every(c=>inKrasnodarKrai(+c[1],+c[0])))throw Error('Точки маршрута должны находиться в области QuietWalk');
   let orsError=null;
+  const toOrsRoute=f=>{
+    const route={geometry:f?.geometry,distance:Number(f?.properties?.summary?.distance),duration:Number(f?.properties?.summary?.duration),steps:(f?.properties?.segments||[]).flatMap(seg=>seg.steps||[]).map(st=>({instruction:st.instruction,way_points:st.way_points||[],distance:st.distance,maneuver:st.type}))};
+    return route.geometry?.coordinates?.length>=2&&Number.isFinite(route.distance)&&route.distance>0&&Number.isFinite(route.duration)&&route.duration>0&&routeInsideKrai(route)?route:null;
+  };
+  const toOsrmRoute=route=>{
+    if(!route?.geometry?.coordinates?.length||!Number.isFinite(Number(route.distance))||!Number.isFinite(Number(route.duration)))return null;
+    route.steps=(route.legs||[]).flatMap(l=>l.steps||[]).map(st=>{
+      const first=st.geometry?.coordinates?.[0];let idx=0;
+      if(first){let best=Infinity;route.geometry.coordinates.forEach((c,i)=>{const d=(c[0]-first[0])**2+(c[1]-first[1])**2;if(d<best){best=d;idx=i}})}
+      const m=st.maneuver||{},turn=m.type==='turn'||m.type==='roundabout'||m.type==='rotary';
+      return {instruction:turn?'Через несколько метров '+(m.modifier==='left'?'поверните налево':m.modifier==='right'?'поверните направо':m.modifier==='slight left'?'держитесь левее':m.modifier==='slight right'?'держитесь правее':'продолжайте по маршруту'):(st.name?'Продолжайте по улице '+st.name:'Продолжайте движение'),way_points:[idx,idx]};
+    }).filter(st=>st.instruction);
+    return routeInsideKrai(route)?route:null;
+  };
   if(orsKey){
-    try{
-      const body={coordinates:coords,instructions:true,preference:'recommended'};const polygons=avoidPolygons();if(polygons)body.options={avoid_polygons:polygons};
-      let res=await fetch('https://api.heigit.org/openrouteservice/v2/directions/foot-walking/geojson',{method:'POST',headers:{'Authorization':orsKey,'Content-Type':'application/json','Accept':'application/geo+json, application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(25000)});
-      if(!res.ok){const detail=await res.text();if(polygons){delete body.options;res=await fetch('https://api.heigit.org/openrouteservice/v2/directions/foot-walking/geojson',{method:'POST',headers:{'Authorization':orsKey,'Content-Type':'application/json','Accept':'application/geo+json, application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(25000)})}if(!res.ok)throw Error('OpenRouteService: '+res.status+' '+(detail||res.statusText))}
-      const data=await res.json(),f=data.features?.[0];if(!f?.geometry?.coordinates?.length)throw Error('ORS не вернул маршрут');
-      const route={geometry:f.geometry,distance:f.properties?.summary?.distance,duration:f.properties?.summary?.duration,steps:(f.properties?.segments||[]).flatMap(seg=>seg.steps||[]).map(st=>({instruction:st.instruction,way_points:st.way_points||[],distance:st.distance,maneuver:st.type}))};
-      if(!routeInsideKrai(route))throw Error('ORS вернул маршрут за пределами области QuietWalk');
-      return route;
-    }catch(e){orsError=e;console.warn('ORS route rejected; trying regional fallback:',e)}
+    const endpoint='https://api.heigit.org/openrouteservice/v2/directions/foot-walking/geojson';
+    const polygons=avoidPolygons();
+    const request=async body=>fetch(endpoint,{method:'POST',headers:{'Authorization':orsKey,'Content-Type':'application/json','Accept':'application/geo+json, application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(25000)});
+    const baseBody={coordinates:coords,instructions:true,preference:'recommended'};
+    const attempts=[];
+    if(alternatives)attempts.push({...baseBody,alternative_routes:{target_count:3,weight_factor:1.4,share_factor:0.6},...(polygons?{options:{avoid_polygons:polygons}}:{})});
+    if(polygons)attempts.push({...baseBody,options:{avoid_polygons:polygons}});
+    attempts.push(baseBody);
+    for(const body of attempts){
+      try{
+        const res=await request(body);
+        if(!res.ok){const detail=(await res.text()).slice(0,500);throw Error('HeiGIT '+res.status+(detail?' — '+detail:''));}
+        const data=await res.json();
+        const features=Array.isArray(data.features)?data.features:[];
+        const routes=features.map(toOrsRoute).filter(Boolean);
+        if(!routes.length)throw Error('HeiGIT вернул ответ без корректного пешего маршрута');
+        const primary=routes[0];
+        primary.alternatives=routes.slice(1);
+        return primary;
+      }catch(error){orsError=error;console.warn('ORS route attempt failed:',error.message);}
+    }
   }
-  // Резервный маршрутизатор использует формат OSRM lon,lat. Результат проверяется с небольшим запасом у границы региона.
+  // FOSSGIS public OSRM instance is prepared with the foot profile; its documented
+  // endpoint path still uses the OSRM protocol profile segment "driving".
   const path=coords.map(c=>c[0]+','+c[1]).join(';');
-  const url='https://routing.openstreetmap.de/routed-foot/route/v1/driving/'+path+'?overview=full&geometries=geojson&steps=true';
-  const res=await fetch(url,{signal:AbortSignal.timeout(22000)});if(!res.ok)throw Error('Пешеходный маршрутизатор вернул ошибку ('+res.status+')'+(orsError?'; HeiGIT: '+orsError.message:''));
-  const data=await res.json();if(data.code!=='Ok'||!data.routes?.length)throw Error('Не удалось проложить пеший путь в области QuietWalk');
-  const route=data.routes[0];route.steps=(route.legs||[]).flatMap(l=>l.steps||[]).map(st=>{const first=st.geometry?.coordinates?.[0];let idx=0;if(first){let best=Infinity;route.geometry.coordinates.forEach((c,i)=>{const d=(c[0]-first[0])**2+(c[1]-first[1])**2;if(d<best){best=d;idx=i}})}const m=st.maneuver||{};const turn=m.type==='turn'||m.type==='roundabout'||m.type==='rotary';return {instruction:turn?'Через несколько метров '+(m.modifier==='left'?'поверните налево':m.modifier==='right'?'поверните направо':m.modifier==='slight left'?'держитесь левее':m.modifier==='slight right'?'держитесь правее':'продолжайте по маршруту'):(st.name?'Продолжайте по улице '+st.name:'Продолжайте движение'),way_points:[idx,idx]}}).filter(st=>st.instruction);if(!routeInsideKrai(route))throw Error('Сервис прокладки вернул маршрут за пределами области QuietWalk. Он отклонён. Проверьте точки и попробуйте ещё раз.');
-  return route;
+  const baseUrl='https://routing.openstreetmap.de/routed-foot/route/v1/driving/'+path+'?overview=full&geometries=geojson&steps=true';
+  const urls=alternatives?[baseUrl.replace('?overview=','?alternatives=true&overview='),baseUrl]:[baseUrl];
+  let fallbackError=null;
+  for(const url of urls){
+    try{
+      const res=await fetch(url,{signal:AbortSignal.timeout(22000)});
+      if(!res.ok)throw Error('FOSSGIS '+res.status+' '+res.statusText);
+      const data=await res.json();
+      if(data.code!=='Ok'||!Array.isArray(data.routes)||!data.routes.length)throw Error('FOSSGIS: '+(data.message||data.code||'маршрут не найден'));
+      const routes=data.routes.map(toOsrmRoute).filter(Boolean);
+      if(!routes.length)throw Error('FOSSGIS вернул маршрут с некорректной геометрией или за границами региона');
+      const primary=routes[0];primary.alternatives=routes.slice(1);return primary;
+    }catch(error){fallbackError=error;console.warn('Fallback route attempt failed:',error.message);}
+  }
+  const orsDetail=orsError?' ORS: '+orsError.message:'';
+  throw Error('Не удалось построить пеший маршрут. Проверьте доступность сети и сервисов маршрутизации.'+orsDetail+(fallbackError?' Резервный сервис: '+fallbackError.message:''));
 }
 function minDistanceToReports(coords){if(!reports.length)return 99999;let min=99999;for(let i=0;i<coords.length;i+=Math.max(1,Math.floor(coords.length/80))){for(const r of reports)min=Math.min(min,haversine(coords[i],[r.lon,r.lat]))}return min}
 function routeNoisePenalty(route){return computeRouteNoisePenalty(route.geometry.coordinates,[...reports,...autoReports],minDistanceToReportsForOne,Number($('sensitivity').value))}
@@ -364,7 +402,7 @@ async function buildRoute(quiet,guard=null){
  try{
   const a=points[0],b=points[1],start=[a.lng,a.lat],finish=[b.lng,b.lat];
   let chosen,base,detour=0;
-  base=await getFootRoute([start,finish]);
+  base=await getFootRoute([start,finish],{alternatives:quiet});
   if(quiet){
    setStatus('Анализируем тихие улицы, зелёные зоны и потенциальный шум…');
    try{
@@ -378,7 +416,7 @@ async function buildRoute(quiet,guard=null){
   }
   if(!quiet){chosen=base;}
   else{
-   const candidates=[base];
+   const candidates=[base,...(Array.isArray(base.alternatives)?base.alternatives:[])];
    const dx=b.lng-a.lng,dy=b.lat-a.lat,len=Math.hypot(dx,dy)||1;
    // Разные промежуточные точки заставляют маршрутизатор искать реальные обходные варианты,
    // а не повторно запрашивать тот же кратчайший путь.
