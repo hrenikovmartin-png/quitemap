@@ -34,9 +34,27 @@ self.addEventListener('fetch',event=>{
   if(request.method!=='GET')return;
   const url=new URL(request.url);
   const sameOrigin=url.origin===self.location.origin;
-  // Third-party libraries must use the browser's live network path. Caching
-  // CDN responses here can pin a stale/broken Leaflet build and hide fallback errors.
-  if(!sameOrigin)return;
+  const libraryCdn=['cdn.jsdelivr.net','unpkg.com','cdnjs.cloudflare.com'].includes(url.hostname);
+  if(!sameOrigin&&!libraryCdn)return;
+  // CDN libraries use network-first: refresh stale versions when online,
+  // but retain the last known-good response for offline launches.
+  if(libraryCdn){
+    event.respondWith((async()=>{
+      try{
+        const response=await fetch(request);
+        if(response.ok||response.type==='opaque'){
+          const cache=await caches.open(CACHE_NAME);
+          await cache.put(request,response.clone());
+        }
+        return response;
+      }catch(error){
+        const cached=await caches.match(request);
+        if(cached)return cached;
+        return new Response('',{status:503,statusText:'Offline'});
+      }
+    })());
+    return;
+  }
   if(sameOrigin&&request.mode==='navigate'){
     event.respondWith((async()=>{
       try{
