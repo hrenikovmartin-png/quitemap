@@ -86,7 +86,7 @@ try {
     const swReady = await Promise.race([navigator.serviceWorker?.ready.then(registration => !!registration.active).catch(() => false) ?? Promise.resolve(false), new Promise(resolve => setTimeout(() => resolve(false), 20000))]);
     const manifestResponse = await fetch('manifest.webmanifest');
     const manifest = manifestResponse.ok ? await manifestResponse.json() : null;
-    const shellCache = await caches.open('quietwalk-shell-v2').catch(() => null);
+    const shellCache = await caches.open('quietwalk-shell-v3').catch(() => null);
     const cachedBoundary = !!(shellCache && await shellCache.match(new URL('krasnodar-krai.geojson.gz.b64', document.baseURI).href));
     const status = document.getElementById('mapStatus')?.textContent || '';
     const boundaryResponse = await fetch('krasnodar-krai.geojson.gz.b64', { cache: 'no-store' });
