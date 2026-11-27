@@ -7,6 +7,7 @@ const inside = (lat, lon) => lat >= 43 && lat <= 48 && lon >= 36 && lon <= 42;
 test('Overpass query includes green spaces and pedestrian infrastructure', () => {
   const query = buildOverpassPlacesQuery({ south: 44, west: 37, north: 46, east: 40 });
   assert.match(query, /leisure.*park\|garden\|nature_reserve/);
+  assert.match(query, /natural=wood/);
   assert.match(query, /highway.*pedestrian\|footway\|path/);
   assert.match(query, /traffic_calming/);
   assert.match(query, /maxspeed/);
@@ -105,6 +106,7 @@ test('quiet and noise features can be separated without losing source metadata',
 test('route-corridor query requests both quiet and noise evidence with geometry', () => {
   const query = buildOverpassRouteQuery({ south: 44, west: 37, north: 46, east: 40 });
   assert.match(query, /leisure.*park/);
+  assert.match(query, /natural=wood/);
   assert.match(query, /highway.*footway/);
   assert.match(query, /highway.*motorway/);
   assert.match(query, /railway/);
@@ -124,4 +126,14 @@ test('OSM way geometry is retained for map detail rendering', () => {
     ], tags: { leisure: 'park' } }
   ], inside);
   assert.deepEqual(features[0].geometry, [[39, 45], [39.001, 45.001], [39, 45]]);
+});
+
+
+test('natural=wood forests are included as green-space evidence without claiming measured quietness', () => {
+  const features = normalizeOSMFeatures([{ type: 'way', id: 44, center: { lat: 45, lon: 39 }, tags: { natural: 'wood', name: 'Лесной массив' } }], inside);
+  assert.equal(features.length, 1);
+  assert.equal(features[0].kind, 'quiet-feature');
+  assert.equal(features[0].category, 'green-space');
+  assert.equal(features[0].confidence, 'medium');
+  assert.equal(features[0].name, 'Лесной массив');
 });
