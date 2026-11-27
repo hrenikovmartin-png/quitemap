@@ -271,7 +271,30 @@ async function getFootRoute(coords,{alternatives=false}={}) {
       }catch(error){orsError=error;console.warn('ORS route attempt failed:',error.message);}
     }
   }
-  // FOSSGIS public OSRM instance is prepared with the foot profile; its documented
+  // Independent third-party fallback: Valhalla pedestrian routing.
+  // OSRM-compatible GeoJSON lets us reuse the strict geometry and region validator.
+  let valhallaError=null;
+  try{
+    const response=await fetch('https://valhalla1.openstreetmap.de/route',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Accept':'application/json','X-Client-Id':'quietwalk.github.io'},
+      body:JSON.stringify({
+        locations:coords.map(c=>({lon:+c[0],lat:+c[1]})),
+        costing:'pedestrian',units:'kilometers',language:'ru-RU',
+        format:'osrm',shape_format:'geojson',directions_type:'instructions',
+        ...(alternatives?{alternates:2}:{})
+      }),
+      signal:AbortSignal.timeout(12000),cache:'no-store'
+    });
+    if(!response.ok)throw Error('Valhalla HTTP '+response.status+' '+response.statusText);
+    const data=await response.json();
+    if(!Array.isArray(data.routes)||!data.routes.length)throw Error('Valhalla: '+(data.error||data.status||'маршрут не найден'));
+    const routes=data.routes.map(toOsrmRoute).filter(Boolean);
+    if(!routes.length)throw Error('Valhalla вернул маршрут с некорректной геометрией или за границами региона');
+    const primary=routes[0];primary.alternatives=routes.slice(1);return primary;
+  }catch(error){valhallaError=error;console.warn('Valhalla pedestrian fallback failed:',error?.message||error);}
+  // FOSSGIS remains the final fallback if ORS and Valhalla are unavailable.
+ its documented
   // endpoint path still uses the OSRM protocol profile segment "driving".
   const path=coords.map(c=>c[0]+','+c[1]).join(';');
   const baseUrl='https://routing.openstreetmap.de/routed-foot/route/v1/driving/'+path+'?overview=full&geometries=geojson&steps=true';
