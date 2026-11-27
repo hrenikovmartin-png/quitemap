@@ -99,7 +99,7 @@ export function buildOverpassPlacesQuery(bounds, { timeoutSeconds = 20 } = {}) {
   }
   const timeout = Math.max(5, Math.min(60, Math.floor(Number(timeoutSeconds) || 20)));
   const bbox = [south, west, north, east].join(',');
-  return `[out:json][timeout:${timeout}][maxsize:33554432];(nwr[leisure~"^(park|garden|nature_reserve|recreation_ground)$"](${bbox});nwr[landuse~"^(forest|village_green|recreation_ground)$"](${bbox});nwr[natural=wood](${bbox});nwr[highway~"^(pedestrian|footway|path|steps|cycleway|living_street)$"](${bbox});nwr[natural=wood](${bbox});nwr[highway][maxspeed~"^(20|30)( ?km/h)?$"](${bbox});nwr[route~"^(foot|hiking)$"](${bbox});nwr[traffic_calming](${bbox}););out geom tags;`;
+  return `[out:json][timeout:${timeout}][maxsize:33554432];(nwr[leisure~"^(park|garden|nature_reserve|recreation_ground)$"](${bbox});nwr[landuse~"^(forest|village_green|recreation_ground)$"](${bbox});nwr[highway~"^(pedestrian|footway|path|steps|cycleway|living_street)$"](${bbox});nwr[natural=wood](${bbox});nwr[highway][maxspeed~"^(20|30)( ?km/h)?$"](${bbox});nwr[route~"^(foot|hiking)$"](${bbox});nwr[traffic_calming](${bbox}););out geom tags;`;
 }
 
 /**
