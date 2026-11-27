@@ -169,3 +169,20 @@ export function compareRouteNoise(coordsA, coordsB, reports, distanceToReport, s
   if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
   return { penaltyA: a, penaltyB: b, quieter: a === b ? 'equal' : a < b ? 'A' : 'B', difference: Math.abs(a - b) };
 }
+
+
+/**
+ * Select an alternate route only when mapped evidence gives it a meaningful
+ * advantage over the shortest route. A detour alone is not evidence of quiet.
+ */
+export function chooseQuietRouteCandidate(base, alternatives, scoreRoute, minImprovement = 1) {
+  if (!base || typeof scoreRoute !== 'function' || !Array.isArray(alternatives)) return base || null;
+  const baseScore = scoreRoute(base);
+  if (!Number.isFinite(baseScore)) return base;
+  const ranked = alternatives.filter(route => route && route !== base)
+    .map(route => ({ route, score: scoreRoute(route) }))
+    .filter(item => Number.isFinite(item.score))
+    .sort((a, b) => a.score - b.score || (Number(a.route.distance) || Infinity) - (Number(b.route.distance) || Infinity));
+  const best = ranked[0];
+  return best && baseScore - best.score > Math.max(0, Number(minImprovement) || 0) ? best.route : base;
+}

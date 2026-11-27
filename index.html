@@ -105,7 +105,7 @@ html{scroll-behavior:smooth}body{-webkit-font-smoothing:antialiased;line-height:
 <script>try{var t=localStorage.getItem('qw_theme');if(t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches)document.body.classList.add('dark')}catch(e){}</script>
 <script type="module">
 import { haversine, bearingBetween, nearestRouteSegment } from './src/navigation/geometry.mjs';
-import { computeRouteNoisePenalty, computeQuietnessScore, computeRouteQuietFeatureBonus, computeRoutePreference } from './src/routing/quiet-score.mjs';
+import { computeRouteNoisePenalty, computeQuietnessScore, computeRouteQuietFeatureBonus, computeRoutePreference, chooseQuietRouteCandidate } from './src/routing/quiet-score.mjs';
 import { buildOverpassPlacesQuery, buildOverpassRouteQuery, normalizeOSMFeatures, splitOSMFeatures } from './src/data/osm-features.mjs';
 import { getPlaceCell, mergePlaceCells, readPlaceCells } from './src/data/place-cache.mjs';
 (()=>{'use strict';
@@ -437,15 +437,11 @@ async function buildRoute(quiet,guard=null){
    const noSpike=r=>r.geometry.coordinates.every(p=>haversine(p,start)+haversine(p,finish)<=directM*1.5+120);
    const acceptable=candidates.filter(r=>r.distance<=base.distance*maxDetour&&r.distance-base.distance<=maxExtra&&r.distance>=base.distance*1.015&&noSpike(r));
    if(autoReports.length===0&&reports.length===0&&routeQuietFeatures.length===0)toast('Нет данных о шумных объектах и тихой инфраструктуре: используется эвристический обход.');
-   const pool=acceptable.length?acceptable:[base];if(!acceptable.length)toast('Тихого обхода без большого крюка не нашлось, оставлен кратчайший путь');
-   // Сначала избегаем пользовательских шумовых отметок. При равной оценке предпочитаем
-   // умеренный обход, поэтому тихий режим отличается от кратчайшего даже без отметок.
+   if(!acceptable.length)toast('Тихого обхода без большого крюка не нашлось, оставлен кратчайший путь');
+   // Обход выбирается только при реальном преимуществе по картографическим данным.
+   // Сам по себе крюк не делает маршрут тише.
    const preference=route=>{const compact=simplifyNoiseGeometry(route.geometry.coordinates,120,12);return computeRoutePreference(compact,[...reports,...autoReports],routeQuietFeatures,(_,feature)=>minDistanceToReportsForOne(compact,feature),Number($('sensitivity').value))?.score??routeNoisePenalty({...route,geometry:{...route.geometry,coordinates:compact}})};
-   chosen=pool.sort((x,y)=>{
-    const scoreDiff=preference(x)-preference(y);
-    if(Math.abs(scoreDiff)>1)return scoreDiff;
-    return x.distance-y.distance;
-   })[0];
+   chosen=chooseQuietRouteCandidate(base,acceptable,preference,1);
    detour=Math.max(0,(chosen.distance/base.distance-1)*100);
   }
   quietSelected=!!(quiet&&chosen!==base&&detour>=1.5);
