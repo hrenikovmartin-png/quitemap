@@ -33,9 +33,22 @@ try {
   page.on('pageerror', error => errors.push('pageerror: ' + error.message));
   let nativeAlternativesRequested = false;
   let forceOrsFailure = false;
-  await page.addInitScript(() => {
+  await page.addInitScript(async () => {
+    const legacy = await caches.open('quietwalk-shell-v2');
+    await legacy.put(new Request(new URL('legacy-cache-probe', location.href)), new Response('stale'));
     localStorage.setItem('qwmax_orsKey', JSON.stringify('quietwalk-browser-test-key-not-real'));
     localStorage.setItem('qwmax_reports', JSON.stringify([{ id: 9001, lat: 45.04, lon: 38.98, reason: 'Тестовая шумная дорога', created: new Date().toISOString() }]));
+  });
+  let primaryTileFailures = 0;
+  let fallbackTileRequests = 0;
+  await page.route('https://tile.openstreetmap.org/**', async route => {
+    primaryTileFailures++;
+    await route.abort('failed');
+  });
+  await page.route('https://tile.openstreetmap.de/**', async route => {
+    fallbackTileRequests++;
+    const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l7sAAAAASUVORK5CYII=', 'base64');
+    await route.fulfill({ status: 200, contentType: 'image/png', body: pixel });
   });
   await page.route('https://nominatim.openstreetmap.org/search?**', async route => {
     const q = new URL(route.request().url()).searchParams.get('q') || '';
@@ -107,6 +120,7 @@ try {
       serviceWorkerReady: swReady,
       manifestLoaded: !!manifest && manifest.short_name === 'QuietWalk',
       offlineBoundaryCached: cachedBoundary,
+      legacyCacheRemoved: !(await caches.keys()).includes('quietwalk-shell-v2'),
       leafletLoaded: !!window.L,
       mapCreated: !!document.querySelector('#map.leaflet-container'),
       boundaryHttpOk: boundaryResponse.ok,
@@ -121,9 +135,19 @@ try {
     };
   });
 
-  for (const key of ['serviceWorkerReady', 'manifestLoaded', 'offlineBoundaryCached', 'leafletLoaded', 'mapCreated', 'boundaryHttpOk', 'boundaryGzipOk', 'boundaryHasKrasnodarFeature', 'quietButton', 'fastButton', 'startNavigationButton', 'stopNavigationButton', 'routeHistoryTab', 'gpxImportButton']) {
+  for (const key of ['serviceWorkerReady', 'manifestLoaded', 'offlineBoundaryCached', 'legacyCacheRemoved', 'leafletLoaded', 'mapCreated', 'boundaryHttpOk', 'boundaryGzipOk', 'boundaryHasKrasnodarFeature', 'quietButton', 'fastButton', 'startNavigationButton', 'stopNavigationButton', 'routeHistoryTab', 'gpxImportButton']) {
     if (!result[key]) throw new Error('Browser check failed: ' + key);
   }
+  // Toast is transient and may disappear while the service-worker/cache checks above run.
+  // Assert the durable network outcome instead of waiting for a short-lived UI message.
+  const tileFallbackDeadline = Date.now() + 20000;
+  while ((primaryTileFailures < 4 || fallbackTileRequests < 1) && Date.now() < tileFallbackDeadline) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  if (primaryTileFailures < 4 || fallbackTileRequests < 1) {
+    throw new Error('Basemap fallback was not activated after primary tile failures: ' + JSON.stringify({ primaryTileFailures, fallbackTileRequests }));
+  }
+  console.log('PASS: basemap switches to the OSM.de fallback when primary OSM tiles fail.');
   if (!result.status.includes('Область QuietWalk: Краснодарский край + Адыгея')) {
     throw new Error('The application did not accept the Krasnodar Krai boundary: ' + result.status);
   }
