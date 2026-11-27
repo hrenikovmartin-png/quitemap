@@ -1,5 +1,5 @@
 const CACHE_PREFIX='quietwalk-shell-';
-const CACHE_NAME=CACHE_PREFIX+'v2';
+const CACHE_NAME=CACHE_PREFIX+'v3';
 const BASE=self.registration.scope;
 const SHELL=[
   new URL('index.html',BASE).href,
@@ -36,9 +36,11 @@ self.addEventListener('fetch',event=>{
   const sameOrigin=url.origin===self.location.origin;
   const libraryCdn=['cdn.jsdelivr.net','unpkg.com','cdnjs.cloudflare.com'].includes(url.hostname);
   if(!sameOrigin&&!libraryCdn)return;
-  // CDN libraries use network-first: refresh stale versions when online,
-  // but retain the last known-good response for offline launches.
-  if(libraryCdn){
+  // JavaScript modules are network-first: a fresh index.html must never be
+  // paired with stale cached imports after a deployment. Keep the last good
+  // response as an offline fallback.
+  const appScript=sameOrigin&&(request.destination==='script'||/\.(?:mjs|js)$/.test(url.pathname));
+  if(libraryCdn||appScript){
     event.respondWith((async()=>{
       try{
         const response=await fetch(request);
