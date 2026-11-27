@@ -204,3 +204,13 @@ test('quiet-route detour limits keep the direct-distance value in scope with or 
   assert.match(source, /const candidates=\[base,\.\.\.\(Array\.isArray\(base\.alternatives\)\?base\.alternatives:\[\]\)\];\s*const directM=haversine\(start,finish\)/);
   assert.match(source, /const high=Number\(\$\('sensitivity'\)\.value\)===3;const maxDetour=directM/);
 });
+
+
+test('walking route provider retries and OSM enrichment have bounded deadlines', () => {
+  assert.match(source, /AbortSignal\.timeout\(10000\)/);
+  assert.match(source, /AbortSignal\.timeout\(14000\)/);
+  assert.match(source, /requestOverpass\(buildOverpassRouteQuery\(bounds\),8000\)/);
+  assert.match(source, /one alternative request, then one plain walking request/);
+  assert.doesNotMatch(source, /AbortSignal\.timeout\(25000\)/);
+  assert.doesNotMatch(source, /AbortSignal\.timeout\(22000\)/);
+});
