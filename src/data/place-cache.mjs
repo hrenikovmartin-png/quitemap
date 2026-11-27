@@ -3,6 +3,15 @@ const LON_STEP = 0.10;
 export const PLACE_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 export const PLACE_CACHE_MAX_CELLS = 16;
 
+// OSM IDs are unique only within an element type (node, way, relation).
+// Keep legacy prefixed IDs readable while avoiding cross-type cache collisions.
+function featureIdentity(feature) {
+  if (feature?.osmId == null) return null;
+  if (feature.osmType) return String(feature.osmType) + '/' + String(feature.osmId);
+  const legacyId = String(feature.osmId);
+  return legacyId.includes('/') ? legacyId : String(feature.id || legacyId);
+}
+
 export function getPlaceCell(lat, lon, bounds) {
   const latitude = Number(lat), longitude = Number(lon);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
@@ -37,8 +46,9 @@ export function mergePlaceCells(cache, key, features, now = Date.now()) {
   const unique = new Map();
   for (const [, cell] of ordered) {
     for (const feature of cell.features) {
-      if (!feature || feature.osmId == null) continue;
-      const id = String(feature.osmId);
+      if (!feature) continue;
+      const id = featureIdentity(feature);
+      if (!id) continue;
       const previous = unique.get(id);
       if (!previous || (feature.geometry?.length || 0) > (previous.geometry?.length || 0)) unique.set(id, feature);
     }
@@ -52,8 +62,9 @@ export function readPlaceCells(cache, now = Date.now()) {
   for (const cell of Object.values(cache.cells)) {
     if (!cell || !Number.isFinite(cell.fetchedAt) || now - cell.fetchedAt > PLACE_CACHE_TTL || !Array.isArray(cell.features)) continue;
     for (const feature of cell.features) {
-      if (!feature || feature.osmId == null) continue;
-      const id = String(feature.osmId);
+      if (!feature) continue;
+      const id = featureIdentity(feature);
+      if (!id) continue;
       const previous = unique.get(id);
       if (!previous || (feature.geometry?.length || 0) > (previous.geometry?.length || 0)) unique.set(id, feature);
     }
