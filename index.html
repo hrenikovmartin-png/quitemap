@@ -249,12 +249,14 @@ async function getFootRoute(coords,{alternatives=false}={}) {
   if(orsKey){
     const endpoint='https://api.heigit.org/openrouteservice/v2/directions/foot-walking/geojson';
     const polygons=avoidPolygons();
-    const request=async body=>fetch(endpoint,{method:'POST',headers:{'Authorization':orsKey,'Content-Type':'application/json','Accept':'application/geo+json, application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(25000)});
+    const request=async body=>fetch(endpoint,{method:'POST',headers:{'Authorization':orsKey,'Content-Type':'application/json','Accept':'application/geo+json, application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(10000)});
     const baseBody={coordinates:coords,instructions:true,preference:'recommended'};
     const attempts=[];
-    if(alternatives){attempts.push({...baseBody,alternative_routes:{target_count:3,weight_factor:1.4,share_factor:0.6},...(polygons?{options:{avoid_polygons:polygons}}:{})});if(polygons)attempts.push({...baseBody,alternative_routes:{target_count:3,weight_factor:1.4,share_factor:0.6}});}
-    if(polygons)attempts.push({...baseBody,options:{avoid_polygons:polygons}});
-    attempts.push(baseBody);
+    if(alternatives){attempts.push({...baseBody,alternative_routes:{target_count:3,weight_factor:1.4,share_factor:0.6},...(polygons?{options:{avoid_polygons:polygons}}:{})});}
+    // Keep provider retries bounded: one alternative request, then one plain walking request.
+    // Repeating several combinations of avoid-polygons and alternatives can stall routing for minutes.
+    if(polygons||alternatives)attempts.push(baseBody);
+    else if(polygons)attempts.push({...baseBody,options:{avoid_polygons:polygons}});
     for(const body of attempts){
       try{
         const res=await request(body);
@@ -277,7 +279,7 @@ async function getFootRoute(coords,{alternatives=false}={}) {
   let fallbackError=null;
   for(const url of urls){
     try{
-      const res=await fetch(url,{signal:AbortSignal.timeout(22000)});
+      const res=await fetch(url,{signal:AbortSignal.timeout(14000)});
       if(!res.ok)throw Error('FOSSGIS '+res.status+' '+res.statusText);
       const data=await res.json();
       if(data.code!=='Ok'||!Array.isArray(data.routes)||!data.routes.length)throw Error('FOSSGIS: '+(data.message||data.code||'маршрут не найден'));
@@ -429,7 +431,7 @@ async function buildRoute(quiet,guard=null){
       if(guard&&!guard())return;
       const mid=L.latLng((a.lat+b.lat)/2+sign*(mx/L2)*off/111320,(a.lng+b.lng)/2-sign*(my/L2)*off/(111320*cosL));
       if(!inKrasnodarKrai(mid.lat,mid.lng))continue;
-      try{await new Promise(resolve=>setTimeout(resolve,1100));if(guard&&!guard())return;const r=await getFootRoute([start,[mid.lng,mid.lat],finish]);if(routeInsideKrai(r)&&!candidates.some(x=>Math.abs(x.distance-r.distance)<15&&x.geometry.coordinates.length===r.geometry.coordinates.length))candidates.push(r)}catch(e){console.warn('Quiet candidate rejected:',e.message)}
+      try{await new Promise(resolve=>setTimeout(resolve,250));if(guard&&!guard())return;const r=await getFootRoute([start,[mid.lng,mid.lat],finish]);if(routeInsideKrai(r)&&!candidates.some(x=>Math.abs(x.distance-r.distance)<15&&x.geometry.coordinates.length===r.geometry.coordinates.length))candidates.push(r)}catch(e){console.warn('Quiet candidate rejected:',e.message)}
      }
     }
    }
@@ -657,7 +659,7 @@ async function loadRouteContext(start,end){
  if(cached&&cached.key===cacheKey&&cached.expiresAt>Date.now()&&Array.isArray(cached.features)){
   normalized=cached.features.filter(feature=>inKrasnodarKrai(feature.lat,feature.lon));
  }else{
-  const data=await requestOverpass(buildOverpassRouteQuery(bounds),20000);
+  const data=await requestOverpass(buildOverpassRouteQuery(bounds),8000);
   normalized=normalizeOSMFeatures(data.elements,inKrasnodarKrai).map(feature=>{
    const geometry=Array.isArray(feature.geometry)&&feature.geometry.every(point=>inKrasnodarKrai(point[1],point[0]))
     ?simplifyNoiseGeometry(feature.geometry):null;
