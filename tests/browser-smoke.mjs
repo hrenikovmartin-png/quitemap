@@ -245,7 +245,7 @@ try {
     toast: document.getElementById('toast')?.textContent || ''
   }));
   if (!fallbackResult.title.includes('Тихий маршрут') || !fallbackResult.status.includes('построен') || !fallbackResult.distance) {
-    throw new Error('Quiet route OSRM fallback check failed: ' + JSON.stringify(fallbackResult));
+    throw new Error('Quiet route Valhalla fallback check failed: ' + JSON.stringify(fallbackResult));
   }
   console.log('PASS: quiet route is built through Valhalla when ORS is unavailable.');
 
