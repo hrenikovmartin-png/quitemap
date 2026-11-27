@@ -8,7 +8,7 @@ test('Overpass query includes green spaces and pedestrian infrastructure', () =>
   const query = buildOverpassPlacesQuery({ south: 44, west: 37, north: 46, east: 40 });
   assert.match(query, /leisure.*park\|garden\|nature_reserve/);
   assert.match(query, /natural=wood/);
-  assert.equal((query.match(/nwr\\[natural=wood\\]/g) || []).length, 1);
+  assert.equal((query.match(/nwr\[natural=wood\]/g) || []).length, 1);
   assert.match(query, /highway.*pedestrian\|footway\|path/);
   assert.match(query, /traffic_calming/);
   assert.match(query, /maxspeed/);
