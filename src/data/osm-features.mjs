@@ -121,7 +121,7 @@ export function buildOverpassRouteQuery(bounds, { timeoutSeconds = 20 } = {}) {
   }
   const timeout = Math.max(5, Math.min(60, Math.floor(Number(timeoutSeconds) || 20)));
   const bbox = [south, west, north, east].join(',');
-  return `[out:json][timeout:${timeout}][maxsize:67108864];(nwr[leisure~"^(park|garden|nature_reserve|recreation_ground)$"](${bbox});nwr[landuse~"^(forest|village_green|recreation_ground|industrial|commercial)$"](${bbox});nwr[natural=wood](${bbox});nwr[highway~"^(pedestrian|footway|path|steps|cycleway|living_street|motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link)$"](${bbox});nwr[natural=wood](${bbox});nwr[highway][maxspeed~"^(20|30)( ?km/h)?$"](${bbox});nwr[route~"^(foot|hiking)$"](${bbox});nwr[traffic_calming](${bbox});nwr[railway~"^(rail|tram|light_rail|subway)$"](${bbox});nwr[leisure=stadium](${bbox});nwr[amenity~"^(fuel|nightclub|bar)$"](${bbox}););out geom tags;`;
+  return `[out:json][timeout:${timeout}][maxsize:67108864];(nwr[leisure~"^(park|garden|nature_reserve|recreation_ground)$"](${bbox});nwr[landuse~"^(forest|village_green|recreation_ground|industrial|commercial)$"](${bbox});nwr[natural=wood](${bbox});nwr[highway~"^(pedestrian|footway|path|steps|cycleway|living_street|motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link)$"](${bbox});nwr[highway][maxspeed~"^(20|30)( ?km/h)?$"](${bbox});nwr[route~"^(foot|hiking)$"](${bbox});nwr[traffic_calming](${bbox});nwr[railway~"^(rail|tram|light_rail|subway)$"](${bbox});nwr[leisure=stadium](${bbox});nwr[amenity~"^(fuel|nightclub|bar)$"](${bbox}););out geom tags;`;
 }
 
 export function normalizeOSMFeatures(elements, isInside) {
