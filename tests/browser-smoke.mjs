@@ -33,6 +33,7 @@ try {
   page.on('pageerror', error => errors.push('pageerror: ' + error.message));
   let nativeAlternativesRequested = false;
   let forceOrsFailure = false;
+  let forceValhallaFailure = false;
   await page.addInitScript(async () => {
     const legacy = await caches.open('quietwalk-shell-v2');
     await legacy.put(new Request(new URL('legacy-cache-probe', location.href)), new Response('stale'));
@@ -211,6 +212,19 @@ try {
   console.log('PASS: quiet route is built from mocked ORS alternatives and mapped noise evidence.');
 
   forceOrsFailure = true;
+  await page.route('https://valhalla1.openstreetmap.de/route', async route => {
+    if (forceValhallaFailure) {
+      await route.fulfill({ status: 503, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ error: 'mock Valhalla unavailable' }) });
+      return;
+    }
+    const body = JSON.parse(route.request().postData() || '{}');
+    const coords = body.locations || [];
+    const start = [coords[0].lon, coords[0].lat], end = [coords[coords.length - 1].lon, coords[coords.length - 1].lat];
+    const routeData = { distance: 1500, duration: 1000, geometry: { type: 'LineString', coordinates: [start, end] }, legs: [] };
+    const mid = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2 + 0.0024];
+    const alternative = { distance: 1570, duration: 1050, geometry: { type: 'LineString', coordinates: [start, mid, end] }, legs: [] };
+    await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ code: 'Ok', routes: body.alternates ? [routeData, alternative] : [routeData] }) });
+  });
   await page.click('#resetBtn');
   await page.fill('#searchInput', 'TEST_START');
   await page.click('#searchBtn');
@@ -233,9 +247,35 @@ try {
     toast: document.getElementById('toast')?.textContent || ''
   }));
   if (!fallbackResult.title.includes('Тихий маршрут') || !fallbackResult.status.includes('построен') || !fallbackResult.distance) {
-    throw new Error('Quiet route OSRM fallback check failed: ' + JSON.stringify(fallbackResult));
+    throw new Error('Quiet route Valhalla fallback check failed: ' + JSON.stringify(fallbackResult));
   }
-  console.log('PASS: quiet route remains available when ORS is unavailable and OSRM alternatives are used.');
+  console.log('PASS: quiet route is built through Valhalla when ORS is unavailable.');
+
+  forceValhallaFailure = true;
+  await page.click('#resetBtn');
+  await page.fill('#searchInput', 'TEST_START');
+  await page.click('#searchBtn');
+  await page.waitForFunction(() => (document.getElementById('searchInput')?.value || '').includes('Краснодар'), { timeout: 15000 });
+  await page.evaluate(() => window.qwUseSearch());
+  await page.fill('#searchInput', 'TEST_END');
+  await page.click('#searchBtn');
+  await page.waitForFunction(() => (document.getElementById('searchInput')?.value || '').includes('Краснодар'), { timeout: 15000 });
+  await page.evaluate(() => window.qwUseSearch());
+  await page.click('#quietBtn');
+  await page.waitForFunction(() => {
+    const status = document.getElementById('mapStatus')?.textContent || '';
+    const toast = document.getElementById('toast')?.textContent || '';
+    return status.includes('Тихий маршрут построен') || status.includes('Не удалось построить маршрут') || toast.includes('Не удалось построить пеший маршрут');
+  }, { timeout: 30000 });
+  const fossgisResult = await page.evaluate(() => ({
+    title: document.getElementById('routeTitle')?.textContent || '',
+    status: document.getElementById('mapStatus')?.textContent || '',
+    distance: document.getElementById('distance')?.textContent || ''
+  }));
+  if (!fossgisResult.title.includes('Тихий маршрут') || !fossgisResult.status.includes('построен') || !fossgisResult.distance) {
+    throw new Error('Quiet route FOSSGIS final fallback check failed: ' + JSON.stringify(fossgisResult));
+  }
+  console.log('PASS: FOSSGIS remains usable when both ORS and Valhalla are unavailable.');
 
   const validGpx = '<?xml version="1.0"?><gpx version="1.1" creator="QuietWalk" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg><trkpt lat="45.04" lon="38.976"/><trkpt lat="45.041" lon="38.977"/></trkseg></trk></gpx>';
   await page.setInputFiles('#gpxInput', { name: 'quietwalk-valid.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(validGpx) });
