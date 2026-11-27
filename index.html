@@ -294,8 +294,7 @@ async function getFootRoute(coords,{alternatives=false}={}) {
     const primary=routes[0];primary.alternatives=routes.slice(1);return primary;
   }catch(error){valhallaError=error;console.warn('Valhalla pedestrian fallback failed:',error?.message||error);}
   // FOSSGIS remains the final fallback if ORS and Valhalla are unavailable.
- its documented
-  // endpoint path still uses the OSRM protocol profile segment "driving".
+  // Its documented endpoint path still uses the OSRM protocol profile segment "driving".
   const path=coords.map(c=>c[0]+','+c[1]).join(';');
   const baseUrl='https://routing.openstreetmap.de/routed-foot/route/v1/driving/'+path+'?overview=full&geometries=geojson&steps=true';
   const urls=alternatives?[baseUrl.replace('?overview=','?alternatives=true&overview='),baseUrl]:[baseUrl];
