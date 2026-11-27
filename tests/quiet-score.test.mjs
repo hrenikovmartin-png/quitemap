@@ -93,3 +93,27 @@ test('route preference rewards mapped quiet features while retaining noise penal
   assert.ok(withQuiet.score < withoutQuiet.score);
   assert.equal(withQuiet.noisePenalty, withoutQuiet.noisePenalty);
 });
+
+
+test('a detour without mapped evidence does not get selected as a quiet route', async () => {
+  const { chooseQuietRouteCandidate } = await import('../src/routing/quiet-score.mjs');
+  const base = { id: 'shortest', distance: 1000 };
+  const detour = { id: 'detour', distance: 1050 };
+  assert.equal(chooseQuietRouteCandidate(base, [detour], () => 0), base);
+});
+
+test('an alternative is selected only when mapped evidence gives it a meaningful advantage', async () => {
+  const { chooseQuietRouteCandidate } = await import('../src/routing/quiet-score.mjs');
+  const base = { id: 'shortest', distance: 1000 };
+  const worse = { id: 'worse', distance: 1040 };
+  const better = { id: 'quieter', distance: 1050 };
+  const scores = new Map([[base, 20], [worse, 24], [better, 15]]);
+  assert.equal(chooseQuietRouteCandidate(base, [worse, better], route => scores.get(route)), better);
+});
+
+test('an alternative with negligible evidence advantage is rejected', async () => {
+  const { chooseQuietRouteCandidate } = await import('../src/routing/quiet-score.mjs');
+  const base = { id: 'shortest', distance: 1000 };
+  const detour = { id: 'detour', distance: 1050 };
+  assert.equal(chooseQuietRouteCandidate(base, [detour], route => route === base ? 10 : 9.5), base);
+});
