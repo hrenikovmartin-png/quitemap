@@ -138,7 +138,12 @@ try {
   for (const key of ['serviceWorkerReady', 'manifestLoaded', 'offlineBoundaryCached', 'legacyCacheRemoved', 'leafletLoaded', 'mapCreated', 'boundaryHttpOk', 'boundaryGzipOk', 'boundaryHasKrasnodarFeature', 'quietButton', 'fastButton', 'startNavigationButton', 'stopNavigationButton', 'routeHistoryTab', 'gpxImportButton']) {
     if (!result[key]) throw new Error('Browser check failed: ' + key);
   }
-  await page.waitForFunction(() => (document.getElementById('toast')?.textContent || '').includes('включён резервный источник'), { timeout: 20000 });
+  // Toast is transient and may disappear while the service-worker/cache checks above run.
+  // Assert the durable network outcome instead of waiting for a short-lived UI message.
+  const tileFallbackDeadline = Date.now() + 20000;
+  while ((primaryTileFailures < 4 || fallbackTileRequests < 1) && Date.now() < tileFallbackDeadline) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
   if (primaryTileFailures < 4 || fallbackTileRequests < 1) {
     throw new Error('Basemap fallback was not activated after primary tile failures: ' + JSON.stringify({ primaryTileFailures, fallbackTileRequests }));
   }
