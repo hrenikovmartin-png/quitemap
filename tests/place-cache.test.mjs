@@ -32,3 +32,23 @@ test('expired cells are ignored and cache size is bounded', () => {
   assert.equal(Object.keys(cache.cells).length, PLACE_CACHE_MAX_CELLS);
   assert.equal(readPlaceCells(cache, 100000 + PLACE_CACHE_MAX_CELLS + 8 * 24 * 60 * 60 * 1000).length, 0);
 });
+
+
+test('numeric OSM ids from different element types remain distinct in the regional cache', () => {
+  const node = { osmType: 'node', osmId: 42, lat: 45, lon: 39 };
+  const way = { osmType: 'way', osmId: 42, lat: 45.001, lon: 39.001, geometry: [[39,45],[39.001,45.001]] };
+  let cache = mergePlaceCells({ cells: {} }, '2:1', [node], 3000);
+  cache = mergePlaceCells(cache, '2:2', [way], 4000);
+  const features = readPlaceCells(cache, 4000);
+  assert.equal(features.length, 2);
+  assert.deepEqual(new Set(features.map(feature => feature.osmType)), new Set(['node', 'way']));
+});
+
+test('same typed OSM element is deduplicated while retaining richer geometry', () => {
+  const sparse = { osmType: 'way', osmId: 77, geometry: [[39,45]] };
+  const rich = { ...sparse, geometry: [[39,45],[39.001,45.001]] };
+  const cache = mergePlaceCells({ cells: {} }, '3:1', [sparse, rich], 5000);
+  const features = readPlaceCells(cache, 5000);
+  assert.equal(features.length, 1);
+  assert.equal(features[0].geometry.length, 2);
+});
