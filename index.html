@@ -280,7 +280,7 @@ async function getFootRoute(coords,{alternatives=false}={}) {
       headers:{'Content-Type':'application/json','Accept':'application/json','X-Client-Id':'quietwalk.github.io'},
       body:JSON.stringify({
         locations:coords.map(c=>({lon:+c[0],lat:+c[1]})),
-        costing:'pedestrian',units:'kilometers',language:'ru-RU',
+        costing:'pedestrian',units:'km',language:'ru-RU',
         format:'osrm',shape_format:'geojson',directions_type:'instructions',
         ...(alternatives?{alternates:2}:{})
       }),
