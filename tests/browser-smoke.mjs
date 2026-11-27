@@ -221,7 +221,9 @@ try {
     const coords = body.locations || [];
     const start = [coords[0].lon, coords[0].lat], end = [coords[coords.length - 1].lon, coords[coords.length - 1].lat];
     const routeData = { distance: 1500, duration: 1000, geometry: { type: 'LineString', coordinates: [start, end] }, legs: [] };
-    await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ code: 'Ok', routes: [routeData] }) });
+    const mid = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2 + 0.0024];
+    const alternative = { distance: 1570, duration: 1050, geometry: { type: 'LineString', coordinates: [start, mid, end] }, legs: [] };
+    await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ code: 'Ok', routes: body.alternates ? [routeData, alternative] : [routeData] }) });
   });
   await page.click('#resetBtn');
   await page.fill('#searchInput', 'TEST_START');
